@@ -88,7 +88,7 @@ async function translateText(text) {
     }
 }
 
-async function fetchAndSave() {
+export async function fetchAndSave() {
     console.log(`[${new Date().toISOString()}] Starting global intelligence fetch...`);
     let globalPosts = [];
     let postId = 1;
@@ -182,9 +182,11 @@ async function fetchAndSave() {
     }
 }
 
-const dir = path.dirname(OUTPUT_FILE);
-if (!fs.existsSync(dir)){
-    fs.mkdirSync(dir, { recursive: true });
+// Only run automatically if executed directly (e.g., node fetcher.js)
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    const dir = path.dirname(OUTPUT_FILE);
+    if (!fs.existsSync(dir)){
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fetchAndSave();
 }
-
-fetchAndSave();
