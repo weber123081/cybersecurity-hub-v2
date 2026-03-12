@@ -3,14 +3,31 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
+import translate from 'translate-google';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const parser = new Parser();
-const RSS_URL = 'https://www.ithome.com.tw/rss/security';
 const OUTPUT_FILE = path.join(__dirname, '../public/data/news.json');
 
+const SOURCES = [
+    {
+        name: "iThome (TW)",
+        url: 'https://www.ithome.com.tw/rss/security',
+        foreign: false
+    },
+    {
+        name: "The Hacker News",
+        url: 'https://feeds.feedburner.com/TheHackersNews',
+        foreign: true
+    },
+    {
+        name: "BleepingComputer",
+        url: 'https://www.bleepingcomputer.com/feed/',
+        foreign: true
+    }
+];
 const keywordTips = {
   '詐騙': { category: '詐騙防範', icon: 'fa-user-ninja' },
   '密碼': { category: '密碼與帳號', icon: 'fa-key' },
@@ -49,63 +66,93 @@ async function scrapeFullContent(url) {
     }
 }
 
-async function fetchAndSave() {
-    console.log(`[${new Date().toISOString()}] Fetching RSS feed...`);
+async function translateText(text) {
+    if (!text) return "";
     try {
-        const feed = await parser.parseURL(RSS_URL);
-        const rawItems = feed.items.slice(0, 15);
-        
-        const posts = [];
-        for (let i = 0; i < rawItems.length; i++) {
-            const item = rawItems[i];
-            console.log(`[${i+1}/${rawItems.length}] Scraping content for: ${item.title}`);
-            const fullContent = await scrapeFullContent(item.link);
+        return await translate(text, { to: 'zh-tw' });
+    } catch (e) {
+        console.error("Translation error:", e.message);
+        return text; // Fallback to original if translation fails
+    }
+}
+
+async function fetchAndSave() {
+    console.log(`[${new Date().toISOString()}] Starting global intelligence fetch...`);
+    let globalPosts = [];
+    let postId = 1;
+
+    for (const source of SOURCES) {
+        console.log(`\n[${new Date().toISOString()}] Fetching RSS feed from: ${source.name}`);
+        try {
+            const feed = await parser.parseURL(source.url);
+            // Limit to top 5 per source
+            const rawItems = feed.items.slice(0, 5);
             
-            let dateStr = '剛剛';
-            if (item.pubDate) {
-                const d = new Date(item.pubDate);
-                if (!isNaN(d.getTime())) {
-                    dateStr = d.toISOString().split('T')[0];
+            for (let i = 0; i < rawItems.length; i++) {
+                const item = rawItems[i];
+                console.log(`[${source.name}] Scraping content for: ${item.title}`);
+                let fullContent = await scrapeFullContent(item.link);
+                let finalTitle = item.title;
+                
+                // Translate if foreign source
+                if (source.foreign) {
+                    console.log(`  -> Translating content from ${source.name}...`);
+                    finalTitle = await translateText(item.title);
+                    fullContent = await translateText(fullContent);
                 }
-            }
-
-            let matchedCat = defaultCat;
-            const textTarget = item.title + ' ' + (item.contentSnippet || "");
-            for (const [keyword, data] of Object.entries(keywordTips)) {
-                if (textTarget.includes(keyword)) {
-                    matchedCat = data;
-                    break;
+                
+                let dateStr = '剛剛';
+                if (item.pubDate) {
+                    const d = new Date(item.pubDate);
+                    if (!isNaN(d.getTime())) {
+                        dateStr = d.toISOString().split('T')[0];
+                    }
                 }
-            }
 
-            // Also check full content just in case
-            if (matchedCat === defaultCat) {
-               for (const [keyword, data] of Object.entries(keywordTips)) {
-                  if (fullContent.includes(keyword)) {
-                      matchedCat = data;
-                      break;
-                  }
-               }
-            }
+                let matchedCat = defaultCat;
+                const textTarget = finalTitle + ' ' + (item.contentSnippet || "");
+                for (const [keyword, data] of Object.entries(keywordTips)) {
+                    if (textTarget.includes(keyword)) {
+                        matchedCat = data;
+                        break;
+                    }
+                }
 
-            posts.push({
-                id: i + 1,
-                authorName: "資安情報",
-                authorIcon: matchedCat.icon,
-                category: matchedCat.category,
-                timeAgo: dateStr,
-                title: item.title,
-                content: fullContent
-            });
-            
-            // Brief delay to prevent overloading the target server
-            await new Promise(r => setTimeout(r, 800));
+                // Also check full content just in case
+                if (matchedCat === defaultCat) {
+                   for (const [keyword, data] of Object.entries(keywordTips)) {
+                      if (fullContent.includes(keyword)) {
+                          matchedCat = data;
+                          break;
+                      }
+                   }
+                }
+
+                globalPosts.push({
+                    id: postId++,
+                    authorName: `資安情報 · ${source.name}`,
+                    authorIcon: matchedCat.icon,
+                    category: matchedCat.category,
+                    timeAgo: dateStr,
+                    title: finalTitle,
+                    content: fullContent
+                });
+                
+                // Brief delay to prevent overloading target servers and translation APIs
+                await new Promise(r => setTimeout(r, 1500));
+            }
+        } catch (error) {
+            console.error(`[${new Date().toISOString()}] Error processing source ${source.name}:`, error.message);
         }
-        
-        fs.writeFileSync(OUTPUT_FILE, JSON.stringify(posts, null, 2));
-        console.log(`[${new Date().toISOString()}] Successfully saved ${posts.length} posts to ${OUTPUT_FILE}`);
-    } catch (error) {
-        console.error(`[${new Date().toISOString()}] Error fetching RSS feed:`, error.message);
+    }
+    
+    // Sort overall by date (optional, but relying on fetch order is okay for now since we prepend "剛剛/dateStr")
+    // Save unified array
+    try {
+        fs.writeFileSync(OUTPUT_FILE, JSON.stringify(globalPosts, null, 2));
+        console.log(`\n[${new Date().toISOString()}] Successfully saved ${globalPosts.length} posts from all sources to ${OUTPUT_FILE}`);
+    } catch(err) {
+        console.error("Failed to write unified news.json:", err);
     }
 }
 
