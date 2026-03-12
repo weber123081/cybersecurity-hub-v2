@@ -51,7 +51,19 @@ async function scrapeFullContent(url) {
         const $ = cheerio.load(html);
         
         let paragraphs = [];
-        $('.article-content p, .field-name-body p, article p').each((i, el) => {
+        // Expanded selectors to handle iThome, The Hacker News, BleepingComputer etc.
+        const selectors = [
+            '.article-content p', 
+            '.field-name-body p', 
+            'article p', 
+            '.articlebody p', 
+            '#articlebody p',
+            '.articleBody p',
+            '.post-body p',
+            '.article-body p'
+        ].join(', ');
+
+        $(selectors).each((i, el) => {
             const text = $(el).text().trim();
             if (text) {
                 paragraphs.push(text);
@@ -81,16 +93,30 @@ async function fetchAndSave() {
     let globalPosts = [];
     let postId = 1;
 
+    // Calculate the date 30 days ago
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
     for (const source of SOURCES) {
         console.log(`\n[${new Date().toISOString()}] Fetching RSS feed from: ${source.name}`);
         try {
             const feed = await parser.parseURL(source.url);
-            // Limit to top 5 per source
-            const rawItems = feed.items.slice(0, 5);
             
-            for (let i = 0; i < rawItems.length; i++) {
-                const item = rawItems[i];
-                console.log(`[${source.name}] Scraping content for: ${item.title}`);
+            // Filter items from the last 30 days
+            const recentItems = feed.items.filter(item => {
+                if (!item.pubDate) return false;
+                const d = new Date(item.pubDate);
+                return !isNaN(d.getTime()) && d >= thirtyDaysAgo;
+            });
+
+            console.log(`[${source.name}] Found ${recentItems.length} items from the last 30 days.`);
+            
+            // Cap at 25 items per source to prevent API rate limits and json bloat
+            const itemsToProcess = recentItems.slice(0, 25);
+            
+            for (let i = 0; i < itemsToProcess.length; i++) {
+                const item = itemsToProcess[i];
+                console.log(`[${source.name}] (${i+1}/${itemsToProcess.length}) Scraping content for: ${item.title}`);
                 let fullContent = await scrapeFullContent(item.link);
                 let finalTitle = item.title;
                 
