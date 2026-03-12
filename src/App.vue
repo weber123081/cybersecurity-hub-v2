@@ -1,10 +1,26 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import PostCard from './components/PostCard.vue'
 
 const posts = ref([]);
 const loading = ref(true);
 const fetchError = ref(false);
+const activeCategory = ref('全部動態');
+
+const categories = [
+  { name: '全部動態', icon: 'fa-border-all' },
+  { name: '詐騙防範', icon: 'fa-mask' },
+  { name: '密碼與帳號', icon: 'fa-key' },
+  { name: '網路與隱私', icon: 'fa-wifi' },
+  { name: '手機安全', icon: 'fa-mobile-screen' }
+];
+
+const filteredPosts = computed(() => {
+  if (activeCategory.value === '全部動態') {
+    return posts.value;
+  }
+  return posts.value.filter(post => post.category === activeCategory.value);
+});
 
 // App.vue now only acts as a dumb client reading static local JSON.
 // All heavy lifting (RSS fetching, NLP parsing, categorizing) is done by backend/fetcher.js
@@ -43,9 +59,9 @@ onMounted(() => {
         <span>生活資安觀測站</span>
       </div>
       <div class="nav-links">
-        <a href="#" class="active"><i class="fa-solid fa-house"></i> 首頁動態</a>
-        <a href="#"><i class="fa-solid fa-fire"></i> 最新威脅</a>
-        <a href="#"><i class="fa-solid fa-book-open"></i> 防護辭典</a>
+        <a href="#" :class="{ active: activeCategory === '全部動態' }" @click.prevent="activeCategory = '全部動態'"><i class="fa-solid fa-house"></i> 首頁動態</a>
+        <a href="#" :class="{ active: activeCategory === '最新情報' }" @click.prevent="activeCategory = '最新情報'"><i class="fa-solid fa-fire"></i> 最新威脅</a>
+        <a href="#" @click.prevent="alert('防護辭典建置中！')"><i class="fa-solid fa-book-open"></i> 防護辭典</a>
       </div>
       <div class="user-profile">
         <div class="avatar-placeholder"><i class="fa-solid fa-user"></i></div>
@@ -58,11 +74,11 @@ onMounted(() => {
       <div class="widget categories-widget">
         <h3>分類主題</h3>
         <ul>
-          <li class="active"><i class="fa-solid fa-border-all"></i> 全部動態</li>
-          <li><i class="fa-solid fa-mask"></i> 詐騙防範</li>
-          <li><i class="fa-solid fa-key"></i> 密碼與帳號</li>
-          <li><i class="fa-solid fa-wifi"></i> 網路與隱私</li>
-          <li><i class="fa-solid fa-mobile-screen"></i> 手機安全</li>
+          <li v-for="cat in categories" :key="cat.name" 
+              :class="{ active: activeCategory === cat.name }"
+              @click="activeCategory = cat.name">
+            <i :class="['fa-solid', cat.icon]"></i> {{ cat.name }}
+          </li>
         </ul>
       </div>
     </aside>
@@ -79,7 +95,7 @@ onMounted(() => {
         <button @click="fetchLiveNews" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor:pointer;">重新載入</button>
       </div>
 
-      <PostCard v-else v-for="post in posts" :key="post.id" :post="post" />
+      <PostCard v-else v-for="post in filteredPosts" :key="post.id" :post="post" />
     </section>
 
     <aside class="sidebar right-sidebar">
