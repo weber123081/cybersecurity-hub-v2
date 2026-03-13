@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系統管理後台 | 生活資安觀測站</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="min-h-screen p-6">
+        <div class="max-w-4xl mx-auto">
+            <!-- Header -->
+            <header class="mb-8 flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800"><i class="fa-solid fa-server mr-2 text-indigo-600"></i>管理控制中心</h1>
+                    <p class="text-gray-500 mt-1">生活資安觀測站 (Cybersecurity Hub V2)</p>
+                </div>
+                <div class="flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100">
+                    <div :class="['w-3 h-3 rounded-full', status.isFetching ? 'bg-yellow-400 pulse' : 'bg-green-500']"></div>
+                    <span class="text-sm font-medium text-gray-700">{{ status.isFetching ? '資料爬取中...' : '系統待命中' }}</span>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <!-- Status Card -->
+                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-4 opacity-10">
+                        <i class="fa-solid fa-database text-8xl text-indigo-600"></i>
+                    </div>
+                    <h2 class="text-lg font-semibold text-gray-700 mb-4"><i class="fa-solid fa-chart-pie mr-2 text-indigo-500"></i>前台資料庫狀態</h2>
+                    
+                    <div class="space-y-4 relative z-10">
+                        <div class="flex justify-between items-end border-b border-gray-100 pb-3">
+                            <span class="text-gray-500">公開情報總數</span>
+                            <span class="text-3xl font-bold text-gray-800">{{ status.postCount }} <span class="text-sm font-normal text-gray-500">篇</span></span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <span class="text-gray-500">最後更新時間</span>
+                            <span class="text-sm font-medium text-gray-800" v-if="status.lastFetchTime">{{ new Date(status.lastFetchTime).toLocaleString('zh-TW') }}</span>
+                            <span class="text-sm font-medium text-gray-400" v-else>尚未更新</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Automation Card -->
+                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-4 opacity-10">
+                        <i class="fa-solid fa-clock text-8xl text-indigo-600"></i>
+                    </div>
+                    <h2 class="text-lg font-semibold text-gray-700 mb-4"><i class="fa-solid fa-robot mr-2 text-indigo-500"></i>自動排程服務</h2>
+                    
+                    <div class="space-y-4 relative z-10">
+                        <div class="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100">
+                            <div>
+                                <p class="font-medium text-gray-800">背景定時更新</p>
+                                <p class="text-xs text-gray-500 mt-1">每隔 6 小時自動擷取全球新聞並翻譯</p>
+                            </div>
+                            <button @click="toggleScheduler" :disabled="isLoading" 
+                                    :class="['relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2', status.isSchedulerActive ? 'bg-indigo-600' : 'bg-gray-200']">
+                                <span :class="['pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out', status.isSchedulerActive ? 'translate-x-5' : 'translate-x-0']"></span>
+                            </button>
+                        </div>
+                        <div class="text-xs text-gray-500 flex items-center">
+                            <i class="fa-solid fa-circle-info mr-1"></i> 您可以在伺服器保持開啟的情況下，隨時暫停背景排程。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Action Card -->
+            <div class="glass-panel rounded-2xl p-6 text-center">
+                <i class="fa-solid fa-bolt text-4xl text-yellow-400 mb-4"></i>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">手動強制更新</h3>
+                <p class="text-gray-500 mb-6 max-w-lg mx-auto">點擊下方按鈕將無視原定排程，立即啟動爬蟲前往國外網站擷取最新 30 天的文章，並調用 Google API 進行翻譯。</p>
+                
+                <button @click="triggerFetch" :disabled="status.isFetching || isLoading" 
+                        class="inline-flex items-center justify-center px-8 py-4 border border-transparent text-base font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1">
+                    <i :class="['fa-solid mr-2', status.isFetching ? 'fa-spinner fa-spin' : 'fa-play']"></i>
+                    {{ status.isFetching ? '伺服器正在拼命抓取與翻譯中...' : '立即執行抓取任務' }}
+                </button>
+                <div v-if="status.isFetching" class="mt-4 text-sm text-indigo-600 font-medium pulse">
+                    爬蟲可能需要 1~2 分鐘掃描各大外媒，請耐心等候...
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, onUnmounted } = Vue;
+
+        createApp({
+            setup() {
+                const status = ref({
+                    isFetching: false,
+                    lastFetchTime: null,
+                    isSchedulerActive: true,
+                    postCount: 0
+                });
+                const isLoading = ref(false);
+                let pollInterval = null;
+
+                const fetchStatus = async () => {
+                    try {
+                        const res = await fetch('/api/status');
+                        const data = await res.json();
+                        status.value = data;
+                    } catch (e) {
+                        console.error("Error fetching status:", e);
+                    }
+                };
+
+                const triggerFetch = async () => {
+                    if (status.value.isFetching || isLoading.value) return;
+                    isLoading.value = true;
+                    try {
+                        const res = await fetch('/api/fetch', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            status.value.isFetching = true; // Optimistic UI update
+                        } else {
+                            alert(data.message);
+                        }
+                    } catch (e) {
+                        alert("連線後端伺服器失敗");
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const toggleScheduler = async () => {
+                    isLoading.value = true;
+                    try {
+                        const res = await fetch('/api/scheduler/toggle', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            status.value.isSchedulerActive = data.isSchedulerActive;
+                        }
+                    } catch (e) {
+                        alert("排程狀態切換失敗");
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                onMounted(() => {
+                    fetchStatus();
+                    // Poll status every 3 seconds to catch fetch completion
+                    pollInterval = setInterval(fetchStatus, 3000);
+                });
+
+                onUnmounted(() => {
+                    if (pollInterval) clearInterval(pollInterval);
+                });
+
+                return {
+                    status,
+                    isLoading,
+                    triggerFetch,
+                    toggleScheduler
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

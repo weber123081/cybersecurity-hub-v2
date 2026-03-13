@@ -1,12 +1,13 @@
 {
   "type": "module",
   "scripts": {
-    "schedule": "node scheduler.js"
+    "start": "node server.js"
   },
   "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^5.2.1",
     "node-cron": "^4.2.1",
-    "translate-google": "^1.5.0",
     "rss-parser": "^3.13.0",
-    "cheerio": "^1.0.0-rc.12"
+    "translate-google": "^1.5.0"
   }
 }
