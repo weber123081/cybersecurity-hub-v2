@@ -92,6 +92,24 @@ body {
     cursor: pointer;
 }
 
+.visitor-badge {
+    background: rgba(24, 119, 242, 0.1);
+    border: 1px solid rgba(24, 119, 242, 0.2);
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.visitor-badge span {
+    margin-left: 2px;
+    font-weight: 700;
+}
+
 /* Main Layout */
 .main-container {
     max-width: 1200px;
