@@ -24,11 +24,8 @@ const goHome = (category = '全部動態') => {
         <span>生活資安觀測站</span>
       </div>
       <div class="nav-links">
-        <a href="#" :class="{ active: route.path === '/' && route.query.cat !== '最新情報' }" @click.prevent="goHome('全部動態')">
+        <a href="#" :class="{ active: route.path === '/' }" @click.prevent="goHome('全部動態')">
           <i class="fa-solid fa-house"></i> 首頁動態
-        </a>
-        <a href="#" :class="{ active: route.path === '/' && route.query.cat === '最新情報' }" @click.prevent="goHome('最新情報')">
-          <i class="fa-solid fa-fire"></i> 最新威脅
         </a>
         <router-link to="/dictionary" active-class="active">
           <i class="fa-solid fa-book-open"></i> 防護辭典

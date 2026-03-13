@@ -32,9 +32,9 @@ const keywordTips = {
   '詐騙': { category: '詐騙防範', icon: 'fa-user-ninja' },
   '密碼': { category: '密碼與帳號', icon: 'fa-key' },
   '登入': { category: '密碼與帳號', icon: 'fa-key' },
-  '勒索': { category: '最新情報', icon: 'fa-lock' },
-  '漏洞': { category: '最新情報', icon: 'fa-bug' },
-  '零時差': { category: '最新情報', icon: 'fa-bug' },
+  '勒索': { category: '網路與隱私', icon: 'fa-lock' },
+  '漏洞': { category: '綜合動態', icon: 'fa-bug' },
+  '零時差': { category: '綜合動態', icon: 'fa-bug' },
   '個資': { category: '網路與隱私', icon: 'fa-user-secret' },
   '路由器': { category: '網路與隱私', icon: 'fa-wifi' },
   '蘋果': { category: '手機安全', icon: 'fa-mobile-screen' },
@@ -42,7 +42,7 @@ const keywordTips = {
   'iOS': { category: '手機安全', icon: 'fa-mobile-screen' }
 };
 
-const defaultCat = { category: '最新情報', icon: 'fa-shield-halved' };
+const defaultCat = { category: '綜合動態', icon: 'fa-shield-halved' };
 
 async function scrapeFullContent(url) {
     try {

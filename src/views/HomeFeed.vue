@@ -14,8 +14,7 @@ const categories = [
   { name: '詐騙防範', icon: 'fa-mask' },
   { name: '密碼與帳號', icon: 'fa-key' },
   { name: '網路與隱私', icon: 'fa-wifi' },
-  { name: '手機安全', icon: 'fa-mobile-screen' },
-  { name: '最新情報', icon: 'fa-fire' } // Added this so it matches the header
+  { name: '手機安全', icon: 'fa-mobile-screen' }
 ];
 
 const filteredPosts = computed(() => {
