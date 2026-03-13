@@ -36,9 +36,14 @@
                     <h1 class="text-3xl font-bold text-gray-800"><i class="fa-solid fa-server mr-2 text-indigo-600"></i>管理控制中心</h1>
                     <p class="text-gray-500 mt-1">生活資安觀測站 (Cybersecurity Hub V2)</p>
                 </div>
-                <div class="flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100">
-                    <div :class="['w-3 h-3 rounded-full', status.isFetching ? 'bg-yellow-400 pulse' : 'bg-green-500']"></div>
-                    <span class="text-sm font-medium text-gray-700">{{ status.isFetching ? '資料爬取中...' : '系統待命中' }}</span>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100">
+                        <div :class="['w-3 h-3 rounded-full', status.isFetching ? 'bg-yellow-400 pulse' : 'bg-green-500']"></div>
+                        <span class="text-sm font-medium text-gray-700">{{ status.isFetching ? '資料爬取中...' : '系統待命中' }}</span>
+                    </div>
+                    <button @click="logout" class="bg-gray-800 text-white px-4 py-2 rounded-full shadow-sm text-sm font-medium hover:bg-gray-700 transition-colors">
+                        <i class="fa-solid fa-arrow-right-from-bracket mr-1"></i> 登出
+                    </button>
                 </div>
             </header>
 
@@ -174,11 +179,22 @@
                     if (pollInterval) clearInterval(pollInterval);
                 });
 
+                const logout = async () => {
+                    if (!confirm("確定要登出管理系統嗎？")) return;
+                    try {
+                        await fetch('/api/logout', { method: 'POST' });
+                        window.location.href = '/login.html';
+                    } catch (e) {
+                        alert("登出失敗");
+                    }
+                };
+
                 return {
                     status,
                     isLoading,
                     triggerFetch,
-                    toggleScheduler
+                    toggleScheduler,
+                    logout
                 };
             }
         }).mount('#app');

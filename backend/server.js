@@ -1,4 +1,5 @@
 import express from 'express';
+import session from 'express-session';
 import cron from 'node-cron';
 import path from 'path';
 import fs from 'fs';
@@ -17,9 +18,36 @@ let lastFetchTime = null;
 let scheduledTask = null;
 let isSchedulerActive = true;
 
+// Setup Session Middleware
+app.use(session({
+    secret: 'cyber-super-secret-key-2026',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 } // 1 day in development
+}));
+
+app.use(express.json());
+
+// Authentication Middleware
+function requireAuth(req, res, next) {
+    if (req.session && req.session.loggedIn) {
+        next();
+    } else {
+        res.status(401).json({ success: false, message: '未授權的存取，請先登入' });
+    }
+}
+
+// Intercept requests to admin.html
+app.get('/admin.html', (req, res, next) => {
+    if (req.session && req.session.loggedIn) {
+        next();
+    } else {
+        res.redirect('/login.html');
+    }
+});
+
 // Serve static files from backend/public
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
 
 // Initialize Scheduler
 function startScheduler() {
@@ -57,7 +85,24 @@ async function performFetch() {
     }
 }
 
-// API Endpoints
+// Auth API
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    // Hardcoded credentials as requested by user
+    if (username === 'admin' && password === '25692299') {
+        req.session.loggedIn = true;
+        res.json({ success: true, message: '登入成功' });
+    } else {
+        res.status(401).json({ success: false, message: '帳號或密碼錯誤' });
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true, message: '已登出' });
+});
+
+// Status API (Public or protected, usually fine to be public for polling if insensitive, but let's protect action APIs)
 app.get('/api/status', (req, res) => {
     // Read the current local JSON to get the post count
     let postCount = 0;
@@ -79,7 +124,7 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-app.post('/api/fetch', async (req, res) => {
+app.post('/api/fetch', requireAuth, async (req, res) => {
     if (isFetching) {
         return res.status(429).json({ success: false, message: 'Fetch is already running.' });
     }
@@ -89,7 +134,7 @@ app.post('/api/fetch', async (req, res) => {
     res.json({ success: true, message: 'Fetch started in the background.' });
 });
 
-app.post('/api/scheduler/toggle', (req, res) => {
+app.post('/api/scheduler/toggle', requireAuth, (req, res) => {
     if (isSchedulerActive) {
         stopScheduler();
     } else {
