@@ -14,7 +14,8 @@ const app = express();
 const PORT = 3000;
 
 // 1. Middleware Stack (PRIORITY ORDER)
-app.use(cors()); 
+app.use(cors());
+app.use(express.json());
 app.use(express.json());
 app.use(session({
     secret: 'cyber-super-secret-key-2026',
@@ -24,6 +25,41 @@ app.use(session({
 }));
 
 const STATS_PATH = path.join(__dirname, 'data/stats.json');
+const EMPLOYEES_PATH = path.join(__dirname, 'data/employees.json');
+
+let employees = [];
+try {
+    if (fs.existsSync(EMPLOYEES_PATH)) {
+        employees = JSON.parse(fs.readFileSync(EMPLOYEES_PATH, 'utf8'));
+        console.log(`[INIT] Loaded ${employees.length} employee IP mappings.`);
+    }
+} catch (e) {
+    console.error('Failed to load employee data:', e);
+}
+
+// Analytics State
+const onlineUsers = new Map(); // sessionId -> lastSeen
+
+// Periodic cleanup of inactive users (e.g., every 1 minute)
+setInterval(() => {
+    const now = Date.now();
+    for (const [sid, lastSeen] of onlineUsers.entries()) {
+        if (now - lastSeen > 5 * 60 * 1000) { // 5 minutes inactivity
+            onlineUsers.delete(sid);
+        }
+    }
+}, 60000);
+
+function matchEmployee(ip) {
+    if (!ip) return null;
+    if (ip === '::1' || ip === '127.0.0.1') return "測試管理員 (本機)";
+
+    // Find employee whose ipPatterns are contained within the visitor's IP
+    const found = employees.find(emp =>
+        emp.ipPatterns.some(pat => ip.includes(pat))
+    );
+    return found ? found.name : null;
+}
 
 // Stats Helper Functions
 function getStats() {
@@ -129,7 +165,7 @@ app.get('/api/status', requireAuth, (req, res) => {
         if (fs.existsSync(dataPath)) {
             postCount = JSON.parse(fs.readFileSync(dataPath, 'utf8')).length;
         }
-    } catch (e) {}
+    } catch (e) { }
     res.json({ isFetching, lastFetchTime, isSchedulerActive, postCount });
 });
 
@@ -147,16 +183,36 @@ app.post('/api/scheduler/toggle', requireAuth, (req, res) => {
 // Analytics
 app.post('/api/stats/hit', (req, res) => {
     const stats = getStats();
-    
-    // Deduplication: Only increment if not already marked in this session
+
+    // Update Online Status
+    if (req.sessionID) {
+        onlineUsers.set(req.sessionID, Date.now());
+    }
+
+    // Re-enabled deduplication to prevent refresh spamming
     if (!req.session.hasMarkedVisit) {
         console.log(`[API] New unique hit from ${req.ip}`);
         stats.totalViews += 1;
         req.session.hasMarkedVisit = true;
-        
+
+        let ip = req.body.simIp || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+        // Handle x-forwarded-for list (take first one)
+        if (typeof ip === 'string' && ip.includes(',')) {
+            ip = ip.split(',')[0].trim();
+        }
+
+        // Normalize IPv6 mapping to IPv4 and handle '::1' for local dev
+        if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+        if (ip === '::1') ip = '127.0.0.1';
+
+        const employeeName = matchEmployee(ip);
+        console.log(`[API] New Hit - IP: ${ip}, Remote: ${req.socket.remoteAddress}, X-Fwd: ${req.headers['x-forwarded-for']}`);
+        console.log(`[API] Matching: ${ip} -> ${employeeName || 'No Match'}`);
+
         stats.logs.unshift({
-            ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-            userAgent: req.headers['user-agent'],
+            ip: ip,
+            employeeName: employeeName || '外部訪客',
             timestamp: new Date().toISOString()
         });
         if (stats.logs.length > 100) stats.logs.pop();
@@ -164,16 +220,64 @@ app.post('/api/stats/hit', (req, res) => {
     } else {
         console.log(`[API] Repeat hit from ${req.ip} (Ignored)`);
     }
-    
+
     res.json({ success: true, totalViews: stats.totalViews });
 });
 
 app.get('/api/stats/summary', (req, res) => {
-    res.json({ totalViews: getStats().totalViews });
+    const stats = getStats();
+    res.json({
+        totalViews: stats.totalViews,
+        onlineCount: onlineUsers.size,
+        postViews: stats.postViews || {}
+    });
+});
+
+app.post('/api/stats/post-view/:id', (req, res) => {
+    const { id } = req.params;
+    const stats = getStats();
+    if (!stats.postViews) stats.postViews = {};
+    stats.postViews[id] = (stats.postViews[id] || 0) + 1;
+    saveStats(stats);
+    res.json({ success: true, count: stats.postViews[id] });
 });
 
 app.get('/api/admin/visitors', requireAuth, (req, res) => {
-    res.json({ logs: getStats().logs });
+    let { startDate, endDate, page, limit } = req.query;
+
+    // Sanitize and provide defaults
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
+    if (page < 1) page = 1;
+
+    let logs = getStats().logs;
+
+    // Filter by date range if provided
+    if (startDate || endDate) {
+        logs = logs.filter(log => {
+            const logDate = new Date(log.timestamp);
+            if (startDate && logDate < new Date(startDate)) return false;
+            // Add 1 day to endDate to include the entire end day
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setDate(end.getDate() + 1);
+                if (logDate >= end) return false;
+            }
+            return true;
+        });
+    }
+
+    const totalCount = logs.length;
+    const totalPages = Math.ceil(totalCount / limit) || 1;
+    const startIndex = (page - 1) * limit;
+    const paginatedLogs = logs.slice(startIndex, startIndex + limit);
+
+    res.json({
+        logs: paginatedLogs,
+        totalCount,
+        totalPages,
+        currentPage: page
+    });
 });
 
 // 5. Static File Protection & Serving
@@ -185,7 +289,7 @@ app.get('/admin.html', (req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.listen(PORT, () => {
-    console.log(`Admin Server: http://localhost:${PORT}/admin.html`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Admin Server: http://10.2.10.102:${PORT}/admin.html`);
     startScheduler();
 });

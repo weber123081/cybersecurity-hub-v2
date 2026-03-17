@@ -5,18 +5,63 @@ const props = defineProps({
   post: {
     type: Object,
     required: true
+  },
+  viewCount: {
+    type: Number,
+    default: 0
   }
 });
 
 const isExpanded = ref(false);
 const MAX_LENGTH = 150;
 
+const bookmarkedIds = ref(JSON.parse(localStorage.getItem('cyberhub_bookmarks') || '[]'));
+const isBookmarked = computed(() => bookmarkedIds.value.includes(props.post.id));
+
+const toggleBookmark = (e) => {
+    e.stopPropagation();
+    let bookmarks = JSON.parse(localStorage.getItem('cyberhub_bookmarks') || '[]');
+    if (isBookmarked.value) {
+        bookmarks = bookmarks.filter(id => id !== props.post.id);
+    } else {
+        bookmarks.push(props.post.id);
+    }
+    localStorage.setItem('cyberhub_bookmarks', JSON.stringify(bookmarks));
+    bookmarkedIds.value = bookmarks;
+};
+
+const articleRef = ref(null);
+
+async function trackView() {
+    if (!isExpanded.value) {
+        isExpanded.value = true;
+        // Report view to backend
+        try {
+            await fetch(`/api/stats/post-view/${props.post.id}`, { method: 'POST' });
+        } catch (e) {
+            console.error("Failed to track post view", e);
+        }
+    } else {
+        isExpanded.value = false;
+        // Scroll back to the top of this article
+        if (articleRef.value) {
+            const yOffset = -80; // Navbar height + margin
+            const y = articleRef.value.getBoundingClientRect().top + window.pageYOffset + yOffset;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+    }
+}
+
 const displayContent = computed(() => {
     if (!props.post.content) return '';
-    if (isExpanded.value || props.post.content.length <= MAX_LENGTH) {
-        return props.post.content;
+    
+    // Defensive fix: Strip trailing dates (e.g. 2026-03-13) that might be accidentally scraped
+    let cleanText = props.post.content.replace(/(\n\n\d{4}-\d{2}-\d{2})+$/, '').trim();
+
+    if (isExpanded.value || cleanText.length <= MAX_LENGTH) {
+        return cleanText;
     }
-    return props.post.content.substring(0, MAX_LENGTH) + '...';
+    return cleanText.substring(0, MAX_LENGTH) + '...';
 });
 
 const needsExpansion = computed(() => {
@@ -25,7 +70,7 @@ const needsExpansion = computed(() => {
 </script>
 
 <template>
-  <article class="post">
+  <article class="post" ref="articleRef">
     <div class="post-header">
       <div class="post-avatar">
         <i :class="['fa-solid', post.authorIcon]"></i>
@@ -34,15 +79,19 @@ const needsExpansion = computed(() => {
         <span class="post-author">{{ post.authorName }}</span>
         <span class="post-time">
           {{ post.timeAgo }} · <i class="fa-solid fa-earth-americas"></i> {{ post.category }}
+          · <i class="fa-solid fa-eye"></i> {{ viewCount }} 次瀏覽
         </span>
       </div>
+      <button class="bookmark-btn" @click="toggleBookmark" :class="{ active: isBookmarked }">
+        <i :class="[isBookmarked ? 'fa-solid' : 'fa-regular', 'fa-bookmark']"></i>
+      </button>
     </div>
     
     <div class="post-content">
       <h2 class="post-title">{{ post.title }}</h2>
       <div class="post-text">
         {{ displayContent }}
-        <button v-if="needsExpansion" class="read-more-btn" @click="isExpanded = !isExpanded">
+        <button v-if="needsExpansion" class="read-more-btn" @click="trackView">
            {{ isExpanded ? '收起內容' : '閱讀全文' }}
         </button>
       </div>
@@ -102,20 +151,43 @@ const needsExpansion = computed(() => {
     gap: 0.25rem;
 }
 
+.bookmark-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    padding: 0.5rem;
+    border-radius: 50%;
+}
+
+.bookmark-btn:hover {
+    background-color: var(--bg-main);
+    color: var(--primary-color);
+}
+
+.bookmark-btn.active {
+    color: var(--primary-color);
+}
+
 .post-content {
     padding: 0 1.25rem 1rem;
 }
 
 .post-title {
-    font-size: 1.2rem;
-    margin-bottom: 0.5rem;
-    line-height: 1.4;
+    font-size: 1.35rem; /* Larger title */
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
 }
 
 .post-text {
-    font-size: 1rem;
+    font-size: 1.05rem; /* Larger text */
     color: var(--text-primary);
     white-space: pre-line;
+    line-height: 1.8; /* Higher line height for reading comfort */
+    letter-spacing: 0.02em;
 }
 
 .read-more-btn {
