@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ithome-tw",
+    "name": "iThome (TW)",
+    "url": "https://www.ithome.com.tw/rss/security",
+    "foreign": false,
+    "enabled": true
+  },
+  {
+    "id": "twcert-alert",
+    "name": "TWCERT/CC 資安警訊",
+    "url": "https://www.twcert.org.tw/tw/rss-104-1.xml",
+    "foreign": false,
+    "enabled": true
+  },
+  {
+    "id": "twcert-vuln",
+    "name": "TWCERT/CC 漏洞通告",
+    "url": "https://www.twcert.org.tw/tw/rss-132-1.xml",
+    "foreign": false,
+    "enabled": true
+  },
+  {
+    "id": "trendmicro-tw",
+    "name": "趨勢科技 台灣資安部落格",
+    "url": "https://blog.trendmicro.com.tw/?feed=rss2",
+    "foreign": false,
+    "enabled": true
+  }
+]

@@ -23,5 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Data
-backend/data/
+# Data (keep RSS sources.json tracked, ignore runtime stats & sensitive employee mappings)
+backend/data/*
+!backend/data/sources.json

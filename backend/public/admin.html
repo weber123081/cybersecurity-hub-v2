@@ -49,7 +49,11 @@
                             class="fa-solid fa-server mr-2 text-indigo-600"></i>管理控制中心</h1>
                     <p class="text-gray-500 mt-1">生活資安觀測站 (Cybersecurity Hub V2)</p>
                 </div>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-3">
+                    <a href="/" target="_blank"
+                        class="bg-white text-indigo-600 px-4 py-2 rounded-full shadow-sm border border-indigo-100 text-sm font-medium hover:bg-indigo-50 transition-colors">
+                        <i class="fa-solid fa-up-right-from-square mr-1"></i> 前往前台
+                    </a>
                     <div
                         class="flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100">
                         <div
@@ -101,7 +105,7 @@
                         <div class="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100">
                             <div>
                                 <p class="font-medium text-gray-800">背景定時更新</p>
-                                <p class="text-xs text-gray-500 mt-1">每隔 6 小時自動擷取全球新聞並翻譯</p>
+                                <p class="text-xs text-gray-500 mt-1">每隔 6 小時自動擷取啟用中的網站情報</p>
                             </div>
                             <button @click="toggleScheduler" :disabled="isLoading"
                                 :class="['relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2', status.isSchedulerActive ? 'bg-indigo-600' : 'bg-gray-200']">
@@ -120,16 +124,408 @@
             <div class="glass-panel rounded-2xl p-6 text-center">
                 <i class="fa-solid fa-bolt text-4xl text-yellow-400 mb-4"></i>
                 <h3 class="text-xl font-bold text-gray-800 mb-2">手動強制更新</h3>
-                <p class="text-gray-500 mb-6 max-w-lg mx-auto">點擊下方按鈕將無視原定排程，立即啟動爬蟲前往國外網站擷取最新 30 天的文章，並調用 Google API
-                    進行翻譯。</p>
+                <p class="text-gray-500 mb-6 max-w-lg mx-auto">點擊下方按鈕將無視原定排程，立即依照下方「爬蟲來源網站管理」啟用中的清單擷取最新 30 天的文章。</p>
 
                 <button @click="triggerFetch" :disabled="status.isFetching || isLoading"
                     class="inline-flex items-center justify-center px-8 py-4 border border-transparent text-base font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1">
                     <i :class="['fa-solid mr-2', status.isFetching ? 'fa-spinner fa-spin' : 'fa-play']"></i>
-                    {{ status.isFetching ? '伺服器正在拼命抓取與翻譯中...' : '立即執行抓取任務' }}
+                    {{ status.isFetching ? '伺服器正在拼命抓取與整理中...' : '立即執行抓取任務' }}
                 </button>
                 <div v-if="status.isFetching" class="mt-4 text-sm text-indigo-600 font-medium pulse">
-                    爬蟲可能需要 1~2 分鐘掃描各大外媒，請耐心等候...
+                    爬蟲正在掃描啟用中的網站，請耐心等候...
+                </div>
+            </div>
+
+            <!-- Internal Announcement & Post Management Card (Item 2) -->
+            <div class="glass-panel rounded-2xl p-6 mt-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">
+                            <i class="fa-solid fa-bullhorn mr-2 text-indigo-500"></i>內部資安公告發布 & 文章管理
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">
+                            可手動張貼組織內部資安公告（支援置頂於首頁最上方，且不受 30 天自動清理影響），或管理、置頂、刪除現有情報文章。
+                        </p>
+                    </div>
+                    <button @click="showPostList = !showPostList"
+                        class="text-xs font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full transition-colors">
+                        <i :class="['fa-solid mr-1', showPostList ? 'fa-chevron-up' : 'fa-list-check']"></i>
+                        {{ showPostList ? '收合文章管理清單' : `管理現有文章 (${posts.length} 篇)` }}
+                    </button>
+                </div>
+
+                <!-- Feedback Banner -->
+                <div v-if="postMessage.text"
+                    :class="['mb-4 p-3 rounded-xl text-sm flex items-center justify-between border', postMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200']">
+                    <div class="flex items-center">
+                        <i :class="['fa-solid mr-2', postMessage.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check']"></i>
+                        <span>{{ postMessage.text }}</span>
+                    </div>
+                    <button @click="postMessage.text = ''" class="text-gray-400 hover:text-gray-600 ml-4">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Publish New Announcement Form -->
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                        <i class="fa-solid fa-pen-to-square mr-1 text-indigo-500"></i>發布內部資安公告 / 自訂情報
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-gray-500 mb-1">公告標題</label>
+                            <input v-model="newPost.title" type="text" placeholder="例：【內部資安通告】本週五進行釣魚郵件社交工程演練"
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">情報分類</label>
+                            <select v-model="newPost.category"
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="企業防護">企業防護</option>
+                                <option value="漏洞預警">漏洞預警</option>
+                                <option value="詐騙防範">詐騙防範</option>
+                                <option value="駭客揭秘">駭客揭秘</option>
+                                <option value="綜合動態">綜合動態</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">發布單位名稱</label>
+                            <input v-model="newPost.authorName" type="text" placeholder="資安管理中心 (內部公告)"
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-gray-500 mb-1">附加參考連結 (選填)</label>
+                            <input v-model="newPost.url" type="text" placeholder="例：https://internal.company.com/security-notice"
+                                class="w-full px-3 py-2 text-sm font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-500 mb-1">公告詳細內文 (支援換行與條列)</label>
+                        <textarea v-model="newPost.content" rows="4" placeholder="請輸入公告完整內容..."
+                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <label class="inline-flex items-center text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" v-model="newPost.isPinned" class="rounded text-indigo-600 mr-2">
+                            📌 置頂於前台首頁最上方
+                        </label>
+                        <button @click="publishCustomPost" :disabled="!newPost.title.trim() || !newPost.content.trim()"
+                            class="px-5 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors disabled:opacity-50">
+                            <i class="fa-solid fa-paper-plane mr-1"></i>立即發布公告
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Collapsible Existing Posts Manager -->
+                <div v-if="showPostList" class="border-t border-gray-200 pt-4">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-3">
+                        <span class="text-sm font-semibold text-gray-700">現有情報與公告列表 (共 {{ filteredPosts.length }} 篇)</span>
+                        <input v-model="postSearchQuery" type="text" placeholder="搜尋文章標題或來源..."
+                            class="w-full md:w-64 px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div class="max-h-80 overflow-y-auto space-y-2 pr-1">
+                        <div v-for="post in filteredPosts" :key="post.id"
+                            :class="['p-3 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-2', post.isPinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200']">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center flex-wrap gap-1.5">
+                                    <span v-if="post.isPinned" class="text-xs px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-semibold">📌 置頂</span>
+                                    <span v-if="post.isCustom" class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-medium">內部公告</span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{{ post.category }}</span>
+                                    <span class="font-medium text-sm text-gray-800 truncate" :title="post.title">{{ post.title }}</span>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">
+                                    來源：{{ post.author?.name || '未知' }} ｜ 發布於：{{ new Date(post.timestamp).toLocaleString('zh-TW') }}
+                                </p>
+                            </div>
+                            <div class="flex items-center space-x-2 shrink-0">
+                                <button @click="togglePinPost(post)"
+                                    :class="['px-2.5 py-1 text-xs font-medium rounded-lg transition-colors', post.isPinned ? 'bg-amber-200 text-amber-900 hover:bg-amber-300' : 'bg-gray-100 text-gray-700 hover:bg-gray-200']">
+                                    <i class="fa-solid fa-thumbtack mr-1"></i>{{ post.isPinned ? '取消置頂' : '置頂' }}
+                                </button>
+                                <button @click="deletePost(post)"
+                                    class="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                                    <i class="fa-solid fa-trash mr-1"></i>刪除
+                                </button>
+                            </div>
+                        </div>
+                        <div v-if="filteredPosts.length === 0" class="text-center py-6 text-sm text-gray-400 italic">
+                            找不到符合條件的文章
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RSS Sources Management Card -->
+            <div class="glass-panel rounded-2xl p-6 mt-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">
+                            <i class="fa-solid fa-rss mr-2 text-indigo-500"></i>爬蟲來源網站管理 (RSS 來源設定)
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">
+                            可隨時新增、修改、停用或刪除要爬取的 RSS 網站，修改後無需重啟伺服器，下次抓取立即生效。
+                        </p>
+                    </div>
+                    <span class="text-xs font-medium bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full">
+                        啟用中：{{ sources.filter(s => s.enabled !== false).length }} / {{ sources.length }} 個網站
+                    </span>
+                </div>
+
+                <!-- Test / Action Feedback Banner -->
+                <div v-if="sourceMessage.text"
+                    :class="['mb-4 p-3 rounded-xl text-sm flex items-center justify-between border', sourceMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200']">
+                    <div class="flex items-center">
+                        <i :class="['fa-solid mr-2', sourceMessage.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check']"></i>
+                        <span>{{ sourceMessage.text }}</span>
+                    </div>
+                    <button @click="sourceMessage.text = ''" class="text-gray-400 hover:text-gray-600 ml-4">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Existing Sources List -->
+                <div class="space-y-3 mb-6">
+                    <div v-for="src in sources" :key="src.id"
+                        :class="['p-4 rounded-xl border transition-all', src.enabled !== false ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-60']">
+                        <!-- Normal Display Mode -->
+                        <div v-if="editingSourceId !== src.id" class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center flex-wrap gap-2">
+                                    <span class="font-semibold text-gray-800">{{ src.name }}</span>
+                                    <span :class="['text-xs px-2 py-0.5 rounded-full font-medium', src.foreign ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800']">
+                                        {{ src.foreign ? '外文 (自動翻譯)' : '中文直抓' }}
+                                    </span>
+                                    <span v-if="src.enabled === false" class="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                                        已停用
+                                    </span>
+                                </div>
+                                <p class="text-xs font-mono text-gray-500 truncate mt-1" :title="src.url">{{ src.url }}</p>
+                            </div>
+
+                            <div class="flex items-center space-x-2 shrink-0">
+                                <!-- Enable/Disable Switch -->
+                                <button @click="toggleSourceEnabled(src)"
+                                    :title="src.enabled !== false ? '點擊停用此來源' : '點擊啟用此來源'"
+                                    :class="['relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out', src.enabled !== false ? 'bg-indigo-600' : 'bg-gray-300']">
+                                    <span
+                                        :class="['pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out', src.enabled !== false ? 'translate-x-5' : 'translate-x-0']"></span>
+                                </button>
+
+                                <!-- Test URL Button -->
+                                <button @click="testRssUrl(src.url)" :disabled="testingUrl === src.url"
+                                    class="px-2.5 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50"
+                                    title="測試此 RSS 網址是否可正常連線解析">
+                                    <i :class="['fa-solid mr-1', testingUrl === src.url ? 'fa-spinner fa-spin' : 'fa-plug-circle-check']"></i>測試
+                                </button>
+
+                                <!-- Edit Button -->
+                                <button @click="startEditSource(src)"
+                                    class="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                                    title="編輯名稱或網址">
+                                    <i class="fa-solid fa-pen mr-1"></i>編輯
+                                </button>
+
+                                <!-- Delete Button -->
+                                <button @click="deleteSource(src)"
+                                    class="px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                                    title="刪除此來源">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Editing Mode -->
+                        <div v-else class="space-y-3">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">網站名稱</label>
+                                    <input v-model="editForm.name" type="text"
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs text-gray-500 mb-1">RSS Feed 網址 (URL)</label>
+                                    <input v-model="editForm.url" type="text"
+                                        class="w-full px-3 py-2 text-sm font-mono border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                <label class="inline-flex items-center text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox" v-model="editForm.foreign" class="rounded text-indigo-600 mr-2">
+                                    外文網站（需自動透過 Google 翻譯成繁體中文）
+                                </label>
+                                <div class="flex space-x-2">
+                                    <button @click="testRssUrl(editForm.url)" :disabled="testingUrl === editForm.url"
+                                        class="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg">
+                                        <i :class="['fa-solid mr-1', testingUrl === editForm.url ? 'fa-spinner fa-spin' : 'fa-plug-circle-check']"></i>測試網址
+                                    </button>
+                                    <button @click="cancelEditSource"
+                                        class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                        取消
+                                    </button>
+                                    <button @click="saveEditSource(src.id)"
+                                        class="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">
+                                        <i class="fa-solid fa-check mr-1"></i>儲存修改
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="sources.length === 0" class="text-center py-6 text-sm text-gray-400 italic">
+                        目前尚未設定任何爬蟲來源，請由下方新增。
+                    </div>
+                </div>
+
+                <!-- Add New Source Form -->
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                        <i class="fa-solid fa-plus-circle mr-1 text-indigo-500"></i>新增爬蟲網站
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <div>
+                            <input v-model="newSource.name" type="text" placeholder="網站名稱 (例：iThome 資安)"
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <input v-model="newSource.url" type="text" placeholder="RSS 網址 (例：https://www.ithome.com.tw/rss/security)"
+                                class="w-full px-3 py-2 text-sm font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <label class="inline-flex items-center text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" v-model="newSource.foreign" class="rounded text-indigo-600 mr-2">
+                            外文網站（需自動透過 Google 翻譯成繁體中文）
+                        </label>
+                        <div class="flex space-x-2">
+                            <button @click="testRssUrl(newSource.url)" :disabled="!newSource.url || testingUrl === newSource.url"
+                                class="px-3 py-2 text-xs font-medium text-indigo-600 bg-white border border-indigo-200 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50">
+                                <i :class="['fa-solid mr-1', testingUrl === newSource.url ? 'fa-spinner fa-spin' : 'fa-plug-circle-check']"></i>測試連線
+                            </button>
+                            <button @click="addSource" :disabled="!newSource.name || !newSource.url"
+                                class="px-4 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors disabled:opacity-50">
+                                <i class="fa-solid fa-plus mr-1"></i>加入清單
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employee / Department IP Mapping Card (Item 3) -->
+            <div class="glass-panel rounded-2xl p-6 mt-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">
+                            <i class="fa-solid fa-address-card mr-2 text-indigo-500"></i>內網員工 / 部門 IP 實名對照設定
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">
+                            設定內網 IP 與部門或員工姓名的對應表（支援直接匯入原本的 <code>員工資料表.txt</code> 或 <code>employees.json</code>），修改後自動回溯更新訪客紀錄。
+                        </p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <label class="cursor-pointer text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-full shadow-sm transition-colors">
+                            <i class="fa-solid fa-file-import mr-1"></i>匯入員工資料表 (.txt / .json)
+                            <input type="file" accept=".txt,.json,.csv" @change="handleEmployeeFileUpload" class="hidden">
+                        </label>
+                        <span class="text-xs font-medium bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full">
+                            共 {{ employees.length }} 組對照規則
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Feedback Banner -->
+                <div v-if="employeeMessage.text"
+                    :class="['mb-4 p-3 rounded-xl text-sm flex items-center justify-between border', employeeMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200']">
+                    <div class="flex items-center">
+                        <i :class="['fa-solid mr-2', employeeMessage.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check']"></i>
+                        <span>{{ employeeMessage.text }}</span>
+                    </div>
+                    <button @click="employeeMessage.text = ''" class="text-gray-400 hover:text-gray-600 ml-4">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Search Filter for Employee Mappings -->
+                <div class="flex justify-between items-center mb-3" v-if="employees.length > 3">
+                    <span class="text-xs text-gray-500">搜尋符合：{{ filteredEmployees.length }} 筆</span>
+                    <input v-model="employeeSearchQuery" type="text" placeholder="搜尋員工姓名、部門或 IP..."
+                        class="w-full md:w-64 px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <!-- Existing Employee Mappings -->
+                <div class="space-y-2 mb-4 max-h-72 overflow-y-auto pr-1">
+                    <div v-for="emp in filteredEmployees" :key="emp.id"
+                        class="p-3.5 rounded-xl border border-gray-200 bg-white">
+                        <div v-if="editingEmployeeId !== emp.id" class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                            <div class="flex items-center flex-wrap gap-2">
+                                <span class="font-semibold text-sm text-gray-800">
+                                    <i class="fa-solid fa-user-tie text-emerald-600 mr-1.5"></i>{{ emp.name }}
+                                </span>
+                                <span v-for="ip in emp.ipPatterns" :key="ip"
+                                    class="text-xs font-mono bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100">
+                                    {{ ip }}
+                                </span>
+                            </div>
+                            <div class="flex items-center space-x-2 shrink-0">
+                                <button @click="startEditEmployee(emp)"
+                                    class="px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                                    <i class="fa-solid fa-pen mr-1"></i>編輯
+                                </button>
+                                <button @click="deleteEmployee(emp)"
+                                    class="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Editing Employee Mode -->
+                        <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">員工 / 部門名稱</label>
+                                <input v-model="editEmployeeForm.name" type="text"
+                                    class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">對應 IP 位址 (多筆用逗號分隔)</label>
+                                <input v-model="editEmployeeForm.ipPatterns" type="text"
+                                    class="w-full px-3 py-1.5 text-sm font-mono border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div class="flex space-x-2 justify-end">
+                                <button @click="editingEmployeeId = null"
+                                    class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                    取消
+                                </button>
+                                <button @click="saveEditEmployee(emp.id)"
+                                    class="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">
+                                    <i class="fa-solid fa-check mr-1"></i>儲存
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add New Employee Mapping Form -->
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                        <i class="fa-solid fa-user-plus mr-1 text-indigo-500"></i>新增員工 / 部門 IP 對照
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                        <div>
+                            <input v-model="newEmployee.name" type="text" placeholder="部門與姓名 (例：資安部 - 陳工程師)"
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <input v-model="newEmployee.ipPatterns" type="text" placeholder="IP 位址 (例：192.168.1.105)"
+                                class="w-full px-3 py-2 text-sm font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="flex justify-end">
+                            <button @click="addEmployee" :disabled="!newEmployee.name.trim() || !newEmployee.ipPatterns.trim()"
+                                class="w-full md:w-auto px-5 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors disabled:opacity-50">
+                                <i class="fa-solid fa-plus mr-1"></i>新增對照規則
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -222,7 +618,7 @@
     </div>
 
     <script>
-        const { createApp, ref, onMounted, onUnmounted } = Vue;
+        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
 
         createApp({
             setup() {
@@ -232,6 +628,247 @@
                     isSchedulerActive: true,
                     postCount: 0
                 });
+
+                // Custom Announcements & Post Management (Item 2)
+                const posts = ref([]);
+                const showPostList = ref(false);
+                const postSearchQuery = ref('');
+                const postMessage = ref({ text: '', type: 'success' });
+                const newPost = ref({
+                    title: '',
+                    category: '企業防護',
+                    authorName: '資安管理中心 (內部公告)',
+                    url: '',
+                    content: '',
+                    isPinned: true
+                });
+
+                const filteredPosts = computed(() => {
+                    const q = postSearchQuery.value.trim().toLowerCase();
+                    if (!q) return posts.value;
+                    return posts.value.filter(p =>
+                        (p.title && p.title.toLowerCase().includes(q)) ||
+                        (p.author?.name && p.author.name.toLowerCase().includes(q)) ||
+                        (p.category && p.category.toLowerCase().includes(q))
+                    );
+                });
+
+                const fetchPosts = async () => {
+                    try {
+                        const res = await fetch('/api/admin/posts');
+                        if (res.ok) {
+                            const data = await res.json();
+                            posts.value = data.posts || [];
+                        }
+                    } catch (e) {
+                        console.error("Error fetching posts:", e);
+                    }
+                };
+
+                const publishCustomPost = async () => {
+                    if (!newPost.value.title.trim() || !newPost.value.content.trim()) return;
+                    try {
+                        const res = await fetch('/api/admin/posts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newPost.value)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            postMessage.value = { text: '已成功發布內部資安公告！前台首頁已同步更新。', type: 'success' };
+                            newPost.value = {
+                                title: '',
+                                category: '企業防護',
+                                authorName: '資安管理中心 (內部公告)',
+                                url: '',
+                                content: '',
+                                isPinned: true
+                            };
+                            fetchPosts();
+                            fetchStatus();
+                        } else {
+                            postMessage.value = { text: data.message || '發布失敗', type: 'error' };
+                        }
+                    } catch (e) {
+                        postMessage.value = { text: '發布公告失敗', type: 'error' };
+                    }
+                };
+
+                const togglePinPost = async (post) => {
+                    try {
+                        const res = await fetch(`/api/admin/posts/${encodeURIComponent(post.id)}/pin`, {
+                            method: 'PUT'
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            fetchPosts();
+                            postMessage.value = {
+                                text: `已${data.isPinned ? '置頂' : '取消置頂'}「${post.title}」`,
+                                type: 'success'
+                            };
+                        }
+                    } catch (e) {
+                        postMessage.value = { text: '置頂狀態切換失敗', type: 'error' };
+                    }
+                };
+
+                const deletePost = async (post) => {
+                    if (!confirm(`確定要從前台資料庫刪除「${post.title}」嗎？`)) return;
+                    try {
+                        const res = await fetch(`/api/admin/posts/${encodeURIComponent(post.id)}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            fetchPosts();
+                            fetchStatus();
+                            postMessage.value = { text: `已刪除文章「${post.title}」`, type: 'success' };
+                        }
+                    } catch (e) {
+                        postMessage.value = { text: '刪除文章失敗', type: 'error' };
+                    }
+                };
+
+                // Employee / Department IP Mappings (Item 3)
+                const employees = ref([]);
+                const employeeSearchQuery = ref('');
+                const newEmployee = ref({ name: '', ipPatterns: '' });
+                const editingEmployeeId = ref(null);
+                const editEmployeeForm = ref({ name: '', ipPatterns: '' });
+                const employeeMessage = ref({ text: '', type: 'success' });
+
+                const filteredEmployees = computed(() => {
+                    const q = employeeSearchQuery.value.trim().toLowerCase();
+                    if (!q) return employees.value;
+                    return employees.value.filter(emp =>
+                        (emp.name && emp.name.toLowerCase().includes(q)) ||
+                        (Array.isArray(emp.ipPatterns) && emp.ipPatterns.some(ip => ip.toLowerCase().includes(q)))
+                    );
+                });
+
+                const handleEmployeeFileUpload = async (event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    try {
+                        const rawText = await file.text();
+                        const res = await fetch('/api/admin/employees/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ rawText, mode: 'replace' })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            employees.value = data.employees;
+                            employeeMessage.value = { text: data.message, type: 'success' };
+                            fetchLogs();
+                        } else {
+                            employeeMessage.value = { text: data.message || '匯入失敗', type: 'error' };
+                        }
+                    } catch (e) {
+                        employeeMessage.value = { text: '讀取或匯入檔案失敗', type: 'error' };
+                    } finally {
+                        event.target.value = '';
+                    }
+                };
+
+                const fetchEmployees = async () => {
+                    try {
+                        const res = await fetch('/api/admin/employees');
+                        if (res.ok) {
+                            const data = await res.json();
+                            employees.value = data.employees || [];
+                        }
+                    } catch (e) {
+                        console.error("Error fetching employees:", e);
+                    }
+                };
+
+                const addEmployee = async () => {
+                    if (!newEmployee.value.name.trim() || !newEmployee.value.ipPatterns.trim()) return;
+                    try {
+                        const res = await fetch('/api/admin/employees', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newEmployee.value)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            employees.value = data.employees;
+                            newEmployee.value = { name: '', ipPatterns: '' };
+                            employeeMessage.value = { text: '已新增員工/部門 IP 對照，並自動回溯更新訪客紀錄！', type: 'success' };
+                            fetchLogs();
+                        } else {
+                            employeeMessage.value = { text: data.message || '新增失敗', type: 'error' };
+                        }
+                    } catch (e) {
+                        employeeMessage.value = { text: '新增對照規則失敗', type: 'error' };
+                    }
+                };
+
+                const startEditEmployee = (emp) => {
+                    editingEmployeeId.value = emp.id;
+                    editEmployeeForm.value = {
+                        name: emp.name,
+                        ipPatterns: (emp.ipPatterns || []).join(', ')
+                    };
+                };
+
+                const saveEditEmployee = async (id) => {
+                    if (!editEmployeeForm.value.name.trim() || !editEmployeeForm.value.ipPatterns.trim()) {
+                        employeeMessage.value = { text: '名稱與 IP 不能為空', type: 'error' };
+                        return;
+                    }
+                    try {
+                        const res = await fetch(`/api/admin/employees/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(editEmployeeForm.value)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            employees.value = data.employees;
+                            editingEmployeeId.value = null;
+                            employeeMessage.value = { text: '已儲存員工 IP 對照修改，並同步更新訪客紀錄！', type: 'success' };
+                            fetchLogs();
+                        }
+                    } catch (e) {
+                        employeeMessage.value = { text: '修改對照規則失敗', type: 'error' };
+                    }
+                };
+
+                const deleteEmployee = async (emp) => {
+                    if (!confirm(`確定要刪除「${emp.name}」的 IP 對照規則嗎？`)) return;
+                    try {
+                        const res = await fetch(`/api/admin/employees/${emp.id}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            employees.value = data.employees;
+                            employeeMessage.value = { text: `已刪除「${emp.name}」的對照規則`, type: 'success' };
+                            fetchLogs();
+                        }
+                    } catch (e) {
+                        employeeMessage.value = { text: '刪除失敗', type: 'error' };
+                    }
+                };
+
+                // RSS Sources Management
+                const sources = ref([]);
+                const newSource = ref({
+                    name: '',
+                    url: '',
+                    foreign: false
+                });
+                const editingSourceId = ref(null);
+                const editForm = ref({
+                    name: '',
+                    url: '',
+                    foreign: false
+                });
+                const testingUrl = ref('');
+                const sourceMessage = ref({ text: '', type: 'success' });
+
                 const visitorLogs = ref([]);
                 const pagination = ref({
                     totalCount: 0,
@@ -246,6 +883,138 @@
                 const isLoading = ref(false);
                 let pollInterval = null;
 
+                const showMessage = (text, type = 'success') => {
+                    sourceMessage.value = { text, type };
+                };
+
+                const fetchSources = async () => {
+                    try {
+                        const res = await fetch('/api/admin/sources');
+                        if (res.ok) {
+                            const data = await res.json();
+                            sources.value = data.sources || [];
+                        }
+                    } catch (e) {
+                        console.error("Error fetching sources:", e);
+                    }
+                };
+
+                const testRssUrl = async (url) => {
+                    if (!url || !url.trim()) return;
+                    testingUrl.value = url;
+                    showMessage('正在測試連線並解析 RSS...', 'success');
+                    try {
+                        const res = await fetch('/api/admin/sources/test', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url })
+                        });
+                        const data = await res.json();
+                        showMessage(data.message, data.success ? 'success' : 'error');
+                    } catch (e) {
+                        showMessage('連線測試失敗，請確認伺服器狀態', 'error');
+                    } finally {
+                        testingUrl.value = '';
+                    }
+                };
+
+                const addSource = async () => {
+                    if (!newSource.value.name.trim() || !newSource.value.url.trim()) return;
+                    try {
+                        const res = await fetch('/api/admin/sources', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: newSource.value.name,
+                                url: newSource.value.url,
+                                foreign: newSource.value.foreign,
+                                enabled: true
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            sources.value = data.sources;
+                            newSource.value = { name: '', url: '', foreign: false };
+                            showMessage('已成功新增爬蟲網站！下次執行抓取時將自動納入。', 'success');
+                        } else {
+                            showMessage(data.message || '新增失敗', 'error');
+                        }
+                    } catch (e) {
+                        showMessage('新增爬蟲來源失敗', 'error');
+                    }
+                };
+
+                const toggleSourceEnabled = async (src) => {
+                    const newEnabled = src.enabled === false ? true : false;
+                    try {
+                        const res = await fetch(`/api/admin/sources/${src.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ enabled: newEnabled })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            sources.value = data.sources;
+                            showMessage(`已${newEnabled ? '啟用' : '停用'}「${src.name}」`, 'success');
+                        }
+                    } catch (e) {
+                        showMessage('狀態更新失敗', 'error');
+                    }
+                };
+
+                const startEditSource = (src) => {
+                    editingSourceId.value = src.id;
+                    editForm.value = {
+                        name: src.name,
+                        url: src.url,
+                        foreign: Boolean(src.foreign)
+                    };
+                };
+
+                const cancelEditSource = () => {
+                    editingSourceId.value = null;
+                };
+
+                const saveEditSource = async (id) => {
+                    if (!editForm.value.name.trim() || !editForm.value.url.trim()) {
+                        showMessage('網站名稱與 RSS 網址不能為空', 'error');
+                        return;
+                    }
+                    try {
+                        const res = await fetch(`/api/admin/sources/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(editForm.value)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            sources.value = data.sources;
+                            editingSourceId.value = null;
+                            showMessage('已儲存爬蟲來源修改！', 'success');
+                        } else {
+                            showMessage(data.message || '修改失敗', 'error');
+                        }
+                    } catch (e) {
+                        showMessage('儲存修改失敗', 'error');
+                    }
+                };
+
+                const deleteSource = async (src) => {
+                    if (!confirm(`確定要刪除「${src.name}」嗎？`)) return;
+                    try {
+                        const res = await fetch(`/api/admin/sources/${src.id}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            sources.value = data.sources;
+                            showMessage(`已刪除「${src.name}」`, 'success');
+                        }
+                    } catch (e) {
+                        showMessage('刪除失敗', 'error');
+                    }
+                };
+
                 const fetchStatus = async () => {
                     try {
                         const res = await fetch('/api/status');
@@ -254,7 +1023,11 @@
                             return;
                         }
                         const data = await res.json();
+                        const prevCount = status.value.postCount;
                         status.value = data;
+                        if (data.postCount !== prevCount) {
+                            fetchPosts();
+                        }
                     } catch (e) {
                         console.error("Error fetching status:", e);
                     }
@@ -269,13 +1042,11 @@
                         const res = await fetch(url);
                         const data = await res.json();
 
-                        // Safety first: provide defaults if data is missing
                         visitorLogs.value = data.logs || [];
                         pagination.value.totalCount = data.totalCount || 0;
                         pagination.value.totalPages = data.totalPages || 1;
                         pagination.value.currentPage = data.currentPage || 1;
 
-                        // Calculate startIndex and ensure it is a number
                         startIndex.value = (pagination.value.currentPage - 1) * 10;
                     } catch (e) {
                         console.error("Error fetching logs:", e);
@@ -345,6 +1116,9 @@
 
                 onMounted(() => {
                     fetchStatus();
+                    fetchPosts();
+                    fetchSources();
+                    fetchEmployees();
                     fetchLogs();
                     pollInterval = setInterval(fetchStatus, 3000);
                 });
@@ -355,6 +1129,44 @@
 
                 return {
                     status,
+                    // Posts & Announcements (Item 2)
+                    posts,
+                    showPostList,
+                    postSearchQuery,
+                    postMessage,
+                    newPost,
+                    filteredPosts,
+                    publishCustomPost,
+                    togglePinPost,
+                    deletePost,
+                    // Employee IP Mapping (Item 3)
+                    employees,
+                    employeeSearchQuery,
+                    filteredEmployees,
+                    handleEmployeeFileUpload,
+                    newEmployee,
+                    editingEmployeeId,
+                    editEmployeeForm,
+                    employeeMessage,
+                    addEmployee,
+                    startEditEmployee,
+                    saveEditEmployee,
+                    deleteEmployee,
+                    // RSS Sources
+                    sources,
+                    newSource,
+                    editingSourceId,
+                    editForm,
+                    testingUrl,
+                    sourceMessage,
+                    testRssUrl,
+                    addSource,
+                    toggleSourceEnabled,
+                    startEditSource,
+                    cancelEditSource,
+                    saveEditSource,
+                    deleteSource,
+                    // Logs & General
                     visitorLogs,
                     pagination,
                     filters,

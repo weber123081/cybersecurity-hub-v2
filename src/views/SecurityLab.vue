@@ -101,26 +101,48 @@ const scenarios = ref([]);
 const userAnswers = ref([]); 
 const quizHistory = ref(JSON.parse(localStorage.getItem('cyberhub_quiz_history') || '[]'));
 const viewMode = ref('quiz'); // 'quiz' or 'history'
+const selectedCategory = ref('all');
+const selectedOption = ref(null);
+const isAnswered = ref(false);
 
-function initQuiz() {
-  scenarios.value = [...scenariosPool]
+const labCategories = [
+  { id: 'all', name: '🔥 全能綜合實戰', icon: 'fa-fire', pool: [0, 80] },
+  { id: 'phishing', name: '🎣 釣魚與詐騙防範', icon: 'fa-fish-fins', pool: [0, 20] },
+  { id: 'account', name: '🔐 設備與帳號安全', icon: 'fa-key', pool: [20, 40] },
+  { id: 'privacy', name: '🛡️ 隱私與個資自保', icon: 'fa-user-shield', pool: [40, 55] },
+  { id: 'workplace', name: '💼 職場與進階防護', icon: 'fa-briefcase', pool: [55, 80] }
+];
+
+function initQuiz(category = selectedCategory.value) {
+  selectedCategory.value = category;
+  const catObj = labCategories.find(c => c.id === category) || labCategories[0];
+  const [start, end] = catObj.pool;
+  const poolSlice = category === 'all' ? scenariosPool : scenariosPool.slice(start, end);
+
+  scenarios.value = [...poolSlice]
     .sort(() => Math.random() - 0.5)
     .slice(0, 5);
   currentStep.value = 0;
   score.value = 0;
   showResults.value = false;
   userAnswers.value = [];
+  selectedOption.value = null;
+  isAnswered.value = false;
   viewMode.value = 'quiz';
 }
 
 initQuiz();
 
 function handleAnswer(opt) {
+  if (isAnswered.value) return;
+  selectedOption.value = opt;
+  isAnswered.value = true;
+
   userAnswers.value.push({
     title: scenarios.value[currentStep.value].title,
     description: scenarios.value[currentStep.value].description,
-    allOptions: JSON.parse(JSON.stringify(scenarios.value[currentStep.value].options)), // Capture all options
-    userChoiceToken: opt.text, // Store the text of what was chosen
+    allOptions: JSON.parse(JSON.stringify(scenarios.value[currentStep.value].options)),
+    userChoiceToken: opt.text,
     correct: opt.correct,
     feedback: opt.feedback,
     correctAnswerToken: scenarios.value[currentStep.value].options.find(o => o.correct)?.text
@@ -129,7 +151,11 @@ function handleAnswer(opt) {
   if (opt.correct) {
     score.value += 1;
   }
-  
+}
+
+function nextQuestion() {
+  selectedOption.value = null;
+  isAnswered.value = false;
   if (currentStep.value < scenarios.value.length - 1) {
     currentStep.value++;
   } else {
@@ -143,17 +169,42 @@ function finishQuiz() {
     date: new Date().toLocaleString(),
     score: score.value,
     total: scenarios.value.length,
+    categoryName: labCategories.find(c => c.id === selectedCategory.value)?.name || '全能綜合',
     answers: [...userAnswers.value]
   };
   quizHistory.value.unshift(newRecord);
-  // Keep only last 20 records
   if (quizHistory.value.length > 20) quizHistory.value.pop();
   localStorage.setItem('cyberhub_quiz_history', JSON.stringify(quizHistory.value));
 }
 
 function restart() {
-  initQuiz();
+  initQuiz(selectedCategory.value);
 }
+
+const scenarioType = computed(() => {
+  const current = scenarios.value[currentStep.value];
+  if (!current) return 'general';
+  const text = (current.title + ' ' + current.description).toLowerCase();
+  if (text.includes('郵件') || text.includes('信件') || text.includes('信箱') || text.includes('email') || text.includes('netflix') || text.includes('hr')) {
+    return 'email';
+  }
+  if (text.includes('簡訊') || text.includes('line') || text.includes('手機') || text.includes('電話') || text.includes('視訊') || text.includes('通訊軟體') || text.includes('包裹') || text.includes('二維碼')) {
+    return 'sms';
+  }
+  if (text.includes('usb') || text.includes('wifi') || text.includes('電腦') || text.includes('瀏覽器') || text.includes('防火牆') || text.includes('windows') || text.includes('密碼')) {
+    return 'system';
+  }
+  return 'general';
+});
+
+const userRank = computed(() => {
+  const total = scenarios.value.length || 5;
+  const pct = score.value / total;
+  if (pct === 1) return { title: 'SSS 級 資安守護大師', badge: 'fa-crown', color: '#f59e0b', desc: '太強了！具備最高等級的資訊安全防範意識，任何駭客詐騙與社交工程都難逃法眼。' };
+  if (pct >= 0.8) return { title: 'A 級 資安防護專家', badge: 'fa-shield-halved', color: '#10b981', desc: '表現優秀！具備非常扎實的日常防護習慣與威脅辨識警覺。' };
+  if (pct >= 0.6) return { title: 'B 級 具備良好警覺', badge: 'fa-user-shield', color: '#3b82f6', desc: '基本觀念具備，對於高技巧的社交工程話術或細微破綻可再多加留意。' };
+  return { title: 'C 級 需加強日常警覺', badge: 'fa-triangle-exclamation', color: '#ef4444', desc: '容易在急迫或權威話術的情境下中計，強烈建議多至「防護辭典」閱讀自保秘訣！' };
+});
 
 const incorrectAnswers = computed(() => {
   return userAnswers.value.filter(ans => !ans.correct);
@@ -170,65 +221,155 @@ function clearHistory() {
 <template>
   <div class="lab-container">
     <header class="page-header">
-      <h1><i class="fa-solid fa-flask"></i> 實戰演練實驗室</h1>
-      <p>擁有超過 110+ 道專業實戰題庫，每次隨機挑戰 5 關</p>
+      <div class="header-badge">
+        <i class="fa-solid fa-vial-virus"></i> 防禦推演基地
+      </div>
+      <h1>實戰演練實驗室</h1>
+      <p>超過 110+ 道生活情境實戰題庫，精準診斷您的資安體質與威脅辨識敏銳度。</p>
+      
       <div class="header-nav">
         <button 
           :class="['nav-tab', { active: viewMode === 'quiz' }]"
           @click="viewMode = 'quiz'"
         >
-          即時測驗
+          <i class="fa-solid fa-gamepad"></i> 即時測驗挑戰
         </button>
         <button 
           :class="['nav-tab', { active: viewMode === 'history' }]"
           @click="viewMode = 'history'"
         >
-          歷史紀錄 ({{ quizHistory.length }})
+          <i class="fa-solid fa-clock-rotate-left"></i> 歷史戰績 ({{ quizHistory.length }})
+        </button>
+      </div>
+
+      <!-- Category Filter Tabs (Agent 1) -->
+      <div class="lab-category-bar" v-if="viewMode === 'quiz' && !showResults">
+        <button 
+          v-for="cat in labCategories" 
+          :key="cat.id"
+          class="cat-pill"
+          :class="{ active: selectedCategory === cat.id }"
+          @click="initQuiz(cat.id)"
+        >
+          <i :class="['fa-solid', cat.icon]"></i>
+          <span>{{ cat.name }}</span>
         </button>
       </div>
     </header>
 
     <!-- Quiz View -->
-    <div v-if="viewMode === 'quiz'">
+    <div v-if="viewMode === 'quiz'" class="quiz-wrapper">
       <div v-if="!showResults" class="quiz-card widget">
+        <!-- Progress Strip -->
+        <div class="quiz-progress-bar">
+          <div 
+            class="progress-fill" 
+            :style="{ width: `${((currentStep + (isAnswered ? 1 : 0)) / scenarios.length) * 100}%` }"
+          ></div>
+        </div>
+
         <div class="quiz-header">
           <div class="header-top">
-            <span class="step-indicator">情境 {{ currentStep + 1 }} / {{ scenarios.length }}</span>
-            <span class="pool-info">總題庫: {{ scenariosPool.length }} 題</span>
+            <span class="step-indicator">
+              <i class="fa-solid fa-flag-checkered"></i> 關卡 {{ currentStep + 1 }} / {{ scenarios.length }}
+            </span>
+            <span class="scenario-category-badge">
+              <i class="fa-solid fa-tag"></i> {{ labCategories.find(c => c.id === selectedCategory)?.name || '綜合' }}
+            </span>
           </div>
           <h2>{{ scenarios[currentStep]?.title }}</h2>
         </div>
         
         <div class="quiz-body">
-          <p class="description">{{ scenarios[currentStep]?.description }}</p>
-          <div class="options-grid">
+          <!-- Realistic Device Simulation Box (Agent 1) -->
+          <div class="device-mockup" :class="scenarioType">
+            <div class="mockup-header">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="mockup-title" v-if="scenarioType === 'email'">
+                <i class="fa-solid fa-envelope"></i> 收件匣 · 收到一封緊急郵件
+              </span>
+              <span class="mockup-title" v-else-if="scenarioType === 'sms'">
+                <i class="fa-solid fa-comment-sms"></i> 智慧型手機通知 · 收到即時訊息
+              </span>
+              <span class="mockup-title" v-else-if="scenarioType === 'system'">
+                <i class="fa-solid fa-triangle-exclamation"></i> 系統安全警報 · 連線提示
+              </span>
+              <span class="mockup-title" v-else>
+                <i class="fa-solid fa-shield-halved"></i> 日常生活防禦情境
+              </span>
+            </div>
+            <div class="mockup-content">
+              <p class="description">{{ scenarios[currentStep]?.description }}</p>
+            </div>
+          </div>
+
+          <!-- Options Grid -->
+          <div class="options-grid" :class="{ 'has-answered': isAnswered }">
             <button 
               v-for="(opt, idx) in scenarios[currentStep]?.options" 
               :key="idx"
               class="option-btn"
+              :class="{ 
+                'selected': selectedOption === opt,
+                'is-correct': isAnswered && opt.correct,
+                'is-wrong': isAnswered && selectedOption === opt && !opt.correct
+              }"
+              :disabled="isAnswered"
               @click="handleAnswer(opt)"
             >
-              {{ opt.text }}
+              <div class="option-icon">
+                <i v-if="isAnswered && opt.correct" class="fa-solid fa-circle-check"></i>
+                <i v-else-if="isAnswered && selectedOption === opt && !opt.correct" class="fa-solid fa-circle-xmark"></i>
+                <span v-else class="letter-badge">{{ String.fromCharCode(65 + idx) }}</span>
+              </div>
+              <span class="option-text">{{ opt.text }}</span>
+            </button>
+          </div>
+
+          <!-- Immediate Feedback Panel (Agent 1) -->
+          <div v-if="isAnswered" class="immediate-feedback" :class="selectedOption?.correct ? 'feedback-correct' : 'feedback-wrong'">
+            <div class="feedback-status">
+              <div class="status-icon">
+                <i :class="['fa-solid', selectedOption?.correct ? 'fa-circle-check' : 'fa-triangle-exclamation']"></i>
+              </div>
+              <div class="status-text">
+                <strong>{{ selectedOption?.correct ? '🎉 答對了！防護觀念非常正確' : '⚠️ 答錯了！此舉具高度資安威脅' }}</strong>
+                <p>{{ selectedOption?.feedback }}</p>
+              </div>
+            </div>
+
+            <button class="next-btn" @click="nextQuestion">
+              <span>{{ currentStep < scenarios.length - 1 ? '進入下一關 ➔' : '查看演練總結成果 🏆' }}</span>
             </button>
           </div>
         </div>
       </div>
 
+      <!-- Results View -->
       <div v-else class="results-card widget">
-        <i class="fa-solid fa-trophy trophy-icon"></i>
-        <h2>測驗完成！</h2>
+        <div class="rank-badge-wrap" :style="{ color: userRank.color }">
+          <i :class="['fa-solid', userRank.badge, 'trophy-icon']"></i>
+          <span class="rank-name">{{ userRank.title }}</span>
+        </div>
+
+        <h2>演練結算完成！</h2>
+        <p class="rank-desc">{{ userRank.desc }}</p>
+        
         <div class="score-display">
-          得分：<span>{{ score }}</span> / {{ scenarios.length }}
+          <div class="score-number">
+            <span>{{ score }}</span> / {{ scenarios.length }}
+          </div>
+          <div class="score-label">答對題數 (正確率 {{ Math.round((score / scenarios.length) * 100) }}%)</div>
         </div>
 
         <div v-if="incorrectAnswers.length > 0" class="review-section">
-          <h3><i class="fa-solid fa-circle-exclamation"></i> 錯題深度回顧</h3>
-          <p class="review-hint">查看題目、所有選項及您的選擇細節：</p>
+          <h3><i class="fa-solid fa-circle-exclamation"></i> 錯題深度解析與改善對策</h3>
+          <p class="review-hint">請檢視下方失分題目，牢記專家解析以防日後實戰受騙：</p>
           <div class="error-list">
             <div v-for="(ans, idx) in incorrectAnswers" :key="idx" class="error-item">
               <div class="error-q">
-                <span class="q-tag">題目</span>
-                {{ ans.title }}: {{ ans.description }}
+                <span class="q-tag">情境</span>
+                <span>{{ ans.title }}: {{ ans.description }}</span>
               </div>
               
               <div class="full-options-review">
@@ -248,27 +389,28 @@ function clearHistory() {
                   </div>
                   <div class="opt-text">{{ opt.text }}</div>
                   <div v-if="opt.text === ans.userChoiceToken" class="choice-label">您的選擇</div>
+                  <div v-if="opt.text === ans.correctAnswerToken" class="correct-label">標準防護作法</div>
                 </div>
               </div>
 
               <div class="error-feedback">
-                <span class="label">專家解析</span>
+                <span class="label"><i class="fa-solid fa-lightbulb"></i> 專家解析指引：</span>
                 <p>{{ ans.feedback }}</p>
               </div>
             </div>
           </div>
         </div>
         <div v-else class="perfect-score">
-          <i class="fa-solid fa-star"></i> 太棒了！全部答對，資安防護滿分！
+          <i class="fa-solid fa-star"></i> 太棒了！全部答對，具備最高規格防護力！
         </div>
 
-        <div class="stats-footer">
-          測驗成績已存入歷史紀錄，您可以隨時切換分頁查看。
-        </div>
         <div class="action-btns">
           <button class="restart-btn" @click="restart">
-            <i class="fa-solid fa-rotate-right"></i> 重新開始
+            <i class="fa-solid fa-rotate-right"></i> 再測驗一次
           </button>
+          <router-link to="/dictionary" class="goto-dict-btn">
+            <i class="fa-solid fa-book-bookmark"></i> 前往防護辭典複習
+          </router-link>
         </div>
       </div>
     </div>
@@ -276,26 +418,29 @@ function clearHistory() {
     <!-- History View -->
     <div v-if="viewMode === 'history'" class="history-view widget">
       <div class="history-header">
-        <h2><i class="fa-solid fa-clock-rotate-left"></i> 歷史測驗成績</h2>
+        <h2><i class="fa-solid fa-clock-rotate-left"></i> 歷史測驗戰績紀錄</h2>
         <button v-if="quizHistory.length > 0" class="clear-btn" @click="clearHistory">清除紀錄</button>
       </div>
 
       <div v-if="quizHistory.length === 0" class="empty-history">
         <i class="fa-solid fa-ghost"></i>
-        <p>尚無歷史測驗紀錄，去進行一場測驗吧！</p>
-        <button @click="viewMode = 'quiz'" class="restart-btn">發起挑戰</button>
+        <p>尚無歷史測驗紀錄，立即前往進行挑戰吧！</p>
+        <button @click="viewMode = 'quiz'" class="restart-btn">立即開始挑戰</button>
       </div>
 
       <div v-else class="history-list">
         <div v-for="(record, idx) in quizHistory" :key="idx" class="history-item">
           <div class="history-top">
-            <span class="date">{{ record.date }}</span>
+            <div class="h-meta">
+              <span class="h-cat-badge">{{ record.categoryName || '綜合演練' }}</span>
+              <span class="date">{{ record.date }}</span>
+            </div>
             <span class="score" :class="{ perfect: record.score === record.total }">
-              {{ record.score }} / {{ record.total }}
+              {{ record.score }} / {{ record.total }} 題正確
             </span>
           </div>
           <details class="history-details">
-            <summary>查看詳細答題紀錄 (含完整選項)</summary>
+            <summary>查看答題明細與選項</summary>
             <div class="history-detail-list">
               <div v-for="(ans, aidx) in record.answers" :key="aidx" class="h-ans-item" :class="{ correct: ans.correct }">
                 <div class="h-ans-q">{{ ans.title }}: {{ ans.description }}</div>
@@ -316,9 +461,6 @@ function clearHistory() {
                     <span v-if="opt.text === ans.userChoiceToken" class="u-tag">您選的</span>
                   </div>
                 </div>
-                <div v-else class="h-ans-res">
-                   選擇：{{ ans.userChoiceToken }}
-                </div>
 
                 <div v-if="!ans.correct" class="h-ans-feedback">
                   <b>解析：</b>{{ ans.feedback }}
@@ -334,59 +476,140 @@ function clearHistory() {
 
 <style scoped>
 .lab-container {
-  max-width: 900px;
+  max-width: 960px;
+  margin: 80px auto 3rem;
+  padding: 0 1.5rem;
+}
+
+.page-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  font-size: 0.84rem;
+  font-weight: 700;
+  border-radius: 20px;
+  margin-bottom: 0.75rem;
+}
+
+.page-header h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 0.4rem;
+  letter-spacing: -0.02em;
+}
+
+.page-header p {
+  color: var(--text-secondary);
+  font-size: 0.96rem;
+  max-width: 620px;
   margin: 0 auto;
-  padding: 5rem 1.5rem 3rem;
 }
 
 .header-nav {
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-top: 1.5rem;
 }
 
 .nav-tab {
-  padding: 0.6rem 2rem;
+  padding: 0.55rem 1.4rem;
   border: 1px solid var(--border-color);
-  background: var(--bg-main);
+  background: var(--bg-card);
   border-radius: 30px;
   cursor: pointer;
   color: var(--text-secondary);
   font-weight: 600;
-  transition: all 0.2s;
+  font-size: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
 }
 
 .nav-tab.active {
   background: var(--primary-color);
   color: white;
   border-color: var(--primary-color);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.25);
 }
 
-.page-header {
-  margin-bottom: 2.5rem;
-  text-align: center;
+/* Category Pills Bar */
+.lab-category-bar {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
 }
 
-.page-header h1 {
-  font-size: 2.25rem;
-  color: var(--primary-color);
-  margin-bottom: 0.5rem;
-}
-
-.page-header p {
+.cat-pill {
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
   color: var(--text-secondary);
+  padding: 0.35rem 0.85rem;
+  border-radius: 20px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cat-pill:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.cat-pill.active {
+  background-color: var(--text-primary);
+  color: var(--bg-main);
+  border-color: var(--text-primary);
+}
+
+.dark-theme .cat-pill.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
 }
 
 .quiz-card, .results-card, .history-view {
-  padding: 2rem;
-  animation: slideIn 0.4s ease-out;
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg, 16px);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  position: relative;
+  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.quiz-progress-bar {
+  width: 100%;
+  height: 5px;
+  background-color: var(--bg-main);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), #38bdf8);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .quiz-header {
-  margin-bottom: 2rem;
+  padding: 1.75rem 2rem 1.25rem;
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 1rem;
 }
 
 .header-top {
@@ -397,72 +620,313 @@ function clearHistory() {
 }
 
 .step-indicator {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--primary-color);
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.pool-info {
-  font-size: 0.8rem;
+.scenario-category-badge {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  padding: 0.15rem 0.55rem;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.quiz-header h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.015em;
+}
+
+.quiz-body {
+  padding: 1.75rem 2rem 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Realistic Device Mockup Box */
+.device-mockup {
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-main);
+  overflow: hidden;
+}
+
+.mockup-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.6rem 1rem;
+  background-color: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
+.dark-theme .mockup-header {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+}
+
+.dark-theme .dots i {
+  background-color: #475569;
+}
+
+.mockup-content {
+  padding: 1.25rem 1.4rem;
+}
+
 .description {
-  font-size: 1.25rem;
-  line-height: 1.6;
-  margin-bottom: 2rem;
+  font-size: 1.15rem;
+  line-height: 1.65;
   color: var(--text-primary);
 }
 
+/* Options */
 .options-grid {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .option-btn {
-  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
   text-align: left;
-  border: 1px solid var(--border-color);
-  background: var(--bg-main);
+  border: 1.5px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: 12px;
   cursor: pointer;
-  font-size: 1.05rem;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   color: var(--text-primary);
 }
 
-.option-btn:hover {
+.option-btn:hover:not(:disabled) {
   border-color: var(--primary-color);
-  background: var(--bg-card);
-  transform: translateX(10px);
+  background-color: var(--bg-main);
+  transform: translateX(4px);
+}
+
+.option-btn:disabled {
+  cursor: default;
+}
+
+.letter-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.option-icon i {
+  font-size: 1.3rem;
+}
+
+.option-text {
+  font-size: 1.02rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.option-btn.is-correct {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  color: #065f46;
+}
+
+.dark-theme .option-btn.is-correct {
+  color: #34d399;
+}
+
+.option-btn.is-wrong {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  color: #991b1b;
+}
+
+.dark-theme .option-btn.is-wrong {
+  color: #f87171;
+}
+
+/* Immediate Feedback Panel */
+.immediate-feedback {
+  border-radius: 12px;
+  padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  animation: slideUp 0.25s ease-out;
+}
+
+.feedback-correct {
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.feedback-wrong {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.feedback-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.feedback-status .status-icon {
+  font-size: 1.4rem;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.feedback-correct .status-icon { color: #10b981; }
+.feedback-wrong .status-icon { color: #ef4444; }
+
+.status-text strong {
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+  color: var(--text-primary);
+}
+
+.status-text p {
+  font-size: 0.94rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.next-btn {
+  align-self: flex-end;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.65rem 1.6rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s;
+}
+
+.next-btn:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
 }
 
 .results-card {
+  padding: 3rem 2rem;
   text-align: center;
+}
+
+.rank-badge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.rank-badge-wrap .trophy-icon {
+  font-size: 3.5rem;
+}
+
+.rank-name {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.results-card h2 {
+  font-size: 1.8rem;
+  color: var(--text-primary);
+  margin-bottom: 0.4rem;
+}
+
+.rank-desc {
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  max-width: 580px;
+  margin: 0 auto 2rem;
+  line-height: 1.6;
+}
+
+.score-display {
+  background-color: var(--bg-main);
+  display: inline-block;
+  padding: 1.25rem 2.5rem;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+}
+
+.score-number {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.score-label {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.perfect-score {
+  color: #10b981;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
 }
 
 .review-section {
   text-align: left;
   margin-top: 2rem;
-  background: var(--bg-card);
+  background: var(--bg-main);
   padding: 2rem;
-  border-radius: 20px;
+  border-radius: 14px;
   border: 1px solid var(--border-color);
 }
 
 .review-section h3 {
-  color: #e74c3c;
-  margin-bottom: 1.5rem;
+  color: #ef4444;
+  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.error-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2.5rem;
+  font-size: 1.2rem;
 }
 
 .review-hint {
@@ -471,164 +935,197 @@ function clearHistory() {
   margin-bottom: 1.5rem;
 }
 
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.error-item {
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.error-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.error-q {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.q-tag {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
 .full-options-review {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
 }
 
 .review-opt-box {
   display: flex;
   align-items: center;
-  padding: 1rem;
-  background: var(--bg-main);
-  border: 2px solid var(--border-color);
-  border-radius: 10px;
-  gap: 1rem;
-  position: relative;
-  transition: all 0.2s;
+  padding: 0.85rem 1rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  gap: 0.75rem;
 }
 
 .review-opt-box.user-picked {
-  border-color: #e74c3c;
-  background: rgba(231, 76, 60, 0.05);
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
 }
 
 .review-opt-box.correct-opt {
-  border-color: #2ecc71;
-  background: rgba(46, 204, 113, 0.05);
-  box-shadow: 0 0 10px rgba(46, 204, 113, 0.1);
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.05);
 }
 
-.opt-status-icon {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-.correct-opt .opt-status-icon { color: #2ecc71; }
-.user-picked .opt-status-icon { color: #e74c3c; }
-
-.opt-text {
-  font-size: 1rem;
-  font-weight: 500;
-  flex-grow: 1;
-}
+.correct-opt .opt-status-icon { color: #10b981; }
+.user-picked .opt-status-icon { color: #ef4444; }
 
 .choice-label {
   font-size: 0.75rem;
   font-weight: 800;
-  color: #e74c3c;
-  background: rgba(231, 76, 60, 0.1);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
   padding: 2px 8px;
   border-radius: 4px;
-  text-transform: uppercase;
+}
+
+.correct-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+.error-feedback {
+  background: var(--bg-card);
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--primary-color);
 }
 
 .error-feedback .label {
   font-weight: 700;
   color: var(--primary-color);
-  margin-bottom: 4px;
+  font-size: 0.88rem;
   display: block;
+  margin-bottom: 0.25rem;
 }
 
-.error-item {
-  padding-bottom: 2rem;
-  border-bottom: 2px solid var(--border-color);
+.error-feedback p {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 
-.error-q {
-  font-weight: 700;
-  margin-bottom: 1.5rem;
-  font-size: 1.15rem;
-  color: var(--text-primary);
+.action-btns {
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  line-height: 1.5;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
 }
 
-.q-tag {
+.restart-btn {
+  padding: 0.75rem 2rem;
   background: var(--primary-color);
   color: white;
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-
-/* History Mini Grid */
-.h-options-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.5rem;
-  margin: 1rem 0;
-}
-
-.h-opt-mini {
-  font-size: 0.9rem;
-  padding: 0.6rem 1rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  display: flex;
+  border: none;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 0.96rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+  transition: all 0.2s;
+  display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  color: var(--text-secondary);
+  gap: 0.5rem;
 }
 
-.h-opt-mini.u-pick {
-  border-color: #e74c3c;
-  color: #e74c3c;
-  background: rgba(231, 76, 60, 0.05);
+.restart-btn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
 }
 
-.h-opt-mini.c-pick {
-  border-color: #2ecc71;
-  color: #2ecc71;
-  background: rgba(46, 204, 113, 0.05);
-}
-
-.h-opt-mini i {
-  font-size: 0.8rem;
-}
-
-.u-tag {
-  font-size: 0.7rem;
-  background: #e74c3c;
-  color: white;
-  padding: 1px 6px;
-  border-radius: 4px;
-  margin-left: auto;
+.goto-dict-btn {
+  padding: 0.75rem 1.8rem;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 30px;
   font-weight: 700;
+  font-size: 0.96rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
 }
 
-.perfect-score {
+.goto-dict-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* History View */
+.history-view {
   padding: 2rem;
-  background: rgba(46, 204, 113, 0.1);
-  border-radius: 16px;
-  color: #2ecc71;
-  font-weight: 700;
-  font-size: 1.2rem;
-  margin: 2rem 0;
 }
 
 .history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.history-header h2 {
+  font-size: 1.35rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .clear-btn {
-  background: none;
-  border: 1px solid #e74c3c;
-  color: #e74c3c;
-  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.85rem;
   border-radius: 6px;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
   cursor: pointer;
+}
+
+.clear-btn:hover {
+  color: #ef4444;
+  border-color: #ef4444;
 }
 
 .history-list {
@@ -638,131 +1135,154 @@ function clearHistory() {
 }
 
 .history-item {
-  background: var(--bg-main);
-  border: 1px solid var(--border-color);
-  padding: 1.5rem;
+  background-color: var(--bg-main);
+  padding: 1.25rem;
   border-radius: 12px;
-  text-align: left;
+  border: 1px solid var(--border-color);
 }
 
 .history-top {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.h-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.h-cat-badge {
+  font-size: 0.76rem;
+  background-color: var(--bg-card);
+  padding: 0.15rem 0.55rem;
+  border-radius: 12px;
+  font-weight: 700;
+  color: var(--primary-color);
+  border: 1px solid var(--border-color);
 }
 
 .history-top .date {
   color: var(--text-secondary);
-  font-weight: 500;
+  font-size: 0.86rem;
 }
 
 .history-top .score {
-  font-weight: 700;
-  font-size: 1.2rem;
-}
-
-.history-top .score.perfect {
-  color: #2ecc71;
-}
-
-.history-details summary {
-  cursor: pointer;
-  color: var(--primary-color);
-  font-weight: 600;
-  outline: none;
-}
-
-.history-detail-list {
-  margin-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.h-ans-item {
-  padding: 1rem;
-  border-radius: 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-}
-
-.h-ans-item.correct {
-  border-left: 4px solid #2ecc71;
-}
-
-.h-ans-item:not(.correct) {
-  border-left: 4px solid #e74c3c;
-}
-
-.h-ans-q {
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.h-ans-res {
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.status-tag {
-  font-size: 0.75rem;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-weight: 700;
-}
-
-.status-tag.ok {
-  background: #2ecc71;
-  color: white;
-}
-
-.status-tag.err {
-  background: #e74c3c;
-  color: white;
-}
-
-.h-ans-feedback {
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.trophy-icon {
-  font-size: 4rem;
-  color: #f1c40f;
-  margin-bottom: 1rem;
-}
-
-.score-display span {
-  font-size: 3.5rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: var(--primary-color);
 }
 
-.restart-btn {
-  padding: 0.8rem 2rem;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-weight: 700;
+.history-top .score.perfect {
+  color: #10b981;
+}
+
+.history-details summary {
   cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  padding: 0.4rem 0;
+}
+
+.history-detail-list {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.h-ans-item {
+  background: var(--bg-card);
+  padding: 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  font-size: 0.88rem;
+}
+
+.h-ans-q {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.h-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.h-opt-mini {
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  background-color: var(--bg-main);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.h-opt-mini.u-pick {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.h-opt-mini.c-pick {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.u-tag {
+  font-size: 0.72rem;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+.h-ans-feedback {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .empty-history {
-  padding: 4rem 0;
+  padding: 4rem 1.5rem;
+  text-align: center;
   color: var(--text-secondary);
 }
 
 .empty-history i {
-  font-size: 4rem;
+  font-size: 3.5rem;
   margin-bottom: 1rem;
+  color: var(--text-muted);
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .lab-container {
+    margin-top: 72px;
+    padding: 0 1rem;
+  }
+
+  .quiz-header, .quiz-body {
+    padding: 1.25rem;
+  }
+
+  .option-btn {
+    padding: 0.9rem 1rem;
+  }
 }
 </style>

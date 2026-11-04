@@ -8,19 +8,70 @@ import translate from 'translate-google';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const parser = new Parser();
-const OUTPUT_FILE = path.join(__dirname, '../public/data/news.json');
+// Allow self-signed certificates in environments with SSL/TLS inspection or corporate proxies
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-const SOURCES = [
-    { name: "iThome (TW)", url: 'https://www.ithome.com.tw/rss/security', foreign: false },
-    { name: "The Hacker News", url: 'https://feeds.feedburner.com/TheHackersNews', foreign: true },
-    { name: "BleepingComputer", url: 'https://www.bleepingcomputer.com/feed/', foreign: true },
-    { name: "SecurityWeek", url: 'https://feeds.feedburner.com/securityweek', foreign: true },
-    { name: "Dark Reading", url: 'https://www.darkreading.com/rss.xml', foreign: true },
-    { name: "Krebs on Security", url: 'https://krebsonsecurity.com/feed/', foreign: true },
-    { name: "Threatpost", url: 'https://threatpost.com/feed/', foreign: true },
-    { name: "CyberScoop", url: 'https://www.cyberscoop.com/feed/', foreign: true }
+const parser = new Parser({
+    requestOptions: {
+        rejectUnauthorized: false
+    },
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    }
+});
+
+const OUTPUT_FILE = path.join(__dirname, '../public/data/news.json');
+const SOURCES_FILE = path.join(__dirname, 'data/sources.json');
+
+const DEFAULT_SOURCES = [
+    { id: "ithome-tw", name: "iThome (TW)", url: 'https://www.ithome.com.tw/rss/security', foreign: false, enabled: true },
+    { id: "twcert-alert", name: "TWCERT/CC 資安警訊", url: 'https://www.twcert.org.tw/tw/rss-104-1.xml', foreign: false, enabled: true },
+    { id: "twcert-vuln", name: "TWCERT/CC 漏洞通告", url: 'https://www.twcert.org.tw/tw/rss-132-1.xml', foreign: false, enabled: true },
+    { id: "trendmicro-tw", name: "趨勢科技 台灣資安部落格", url: 'https://blog.trendmicro.com.tw/?feed=rss2', foreign: false, enabled: true }
 ];
+
+// Generate a deterministic positive integer ID from article URL or title
+export function generateStableId(str) {
+    const input = String(str || '');
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i++) {
+        hash ^= input.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) || 1;
+}
+
+export function getSources() {
+    try {
+        if (!fs.existsSync(SOURCES_FILE)) {
+            const dir = path.dirname(SOURCES_FILE);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(SOURCES_FILE, JSON.stringify(DEFAULT_SOURCES, null, 2), 'utf-8');
+            return DEFAULT_SOURCES;
+        }
+        const raw = fs.readFileSync(SOURCES_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : DEFAULT_SOURCES;
+    } catch (e) {
+        console.error("Failed to read sources.json, using default sources:", e.message);
+        return DEFAULT_SOURCES;
+    }
+}
+
+export function saveSources(sources) {
+    const dir = path.dirname(SOURCES_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(SOURCES_FILE, JSON.stringify(sources, null, 2), 'utf-8');
+}
+
+export async function testSourceUrl(url) {
+    const feed = await parser.parseURL(url);
+    return {
+        title: feed.title || '',
+        itemCount: Array.isArray(feed.items) ? feed.items.length : 0,
+        latestItemTitle: feed.items && feed.items[0] ? feed.items[0].title : ''
+    };
+}
 
 const keywordTips = {
     '詐騙': { category: '詐騙防範', icon: 'fa-user-ninja' },
@@ -67,13 +118,20 @@ async function scrapeFullContent(url) {
         const $ = cheerio.load(html);
 
         // Remove known non-article sections
-        $('.related-news, .author-bio, footer, nav, .ad-unit, .newsletter-signup, code, script, style').remove();
+        $('.related-news, .author-bio, footer, nav, header, .ad-unit, .newsletter-signup, .breadcrumb, .share, code, script, style').remove();
 
         let paragraphs = [];
+        const seenParagraphs = new Set();
         const selectors = [
             '.article-content p',
             '.field-name-body p',
             'article p',
+            '.entry-content p',
+            '.post-content p',
+            '.cp p',
+            '.cp li',
+            '.text_content p',
+            '.news-detail p',
             '.articlebody p',
             '#articlebody p',
             '.articleBody p',
@@ -86,9 +144,26 @@ async function scrapeFullContent(url) {
         ].join(', ');
 
         $(selectors).each((i, el) => {
-            const text = $(el).text().trim();
-            if (text && text.length > 20 && !/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+            const text = $(el).text().replace(/\s+/g, ' ').trim();
+            if (text && text.length >= 10 && !/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(text) && !seenParagraphs.has(text)) {
+                seenParagraphs.add(text);
                 paragraphs.push(text);
+            }
+        });
+
+        // Also extract structured table rows (e.g., TWCERT/CC TVN vulnerability advisory tables)
+        $('table tr').each((i, tr) => {
+            const th = $(tr).find('th').first().text().replace(/\s+/g, ' ').trim();
+            const tdHtml = $(tr).find('td').first().html();
+            if (th && tdHtml) {
+                const tdText = cheerio.load(tdHtml.replace(/<br\s*\/?>/gi, '\n')).text().trim();
+                if (tdText) {
+                    const rowStr = `【${th}】\n${tdText}`;
+                    if (!seenParagraphs.has(rowStr)) {
+                        seenParagraphs.add(rowStr);
+                        paragraphs.push(rowStr);
+                    }
+                }
             }
         });
 
@@ -124,14 +199,12 @@ async function translateText(text, retries = 3) {
 
     const translatedChunks = [];
     for (const chunk of chunks) {
-        let success = false;
         for (let i = 0; i < retries; i++) {
             try {
                 // Add a polite delay between each translation chunk
                 await new Promise(r => setTimeout(r, 1500));
                 const res = await translate(chunk, { to: 'zh-tw' });
                 translatedChunks.push(res);
-                success = true;
                 break;
             } catch (e) {
                 console.error(`Chunk translation error (Attempt ${i + 1}):`, e.message);
@@ -153,6 +226,10 @@ async function translateText(text, retries = 3) {
 export async function fetchAndSave() {
     console.log(`[${new Date().toISOString()}] Starting global intelligence fetch...`);
 
+    const allSources = getSources();
+    const activeSources = allSources.filter(s => s.enabled !== false);
+    console.log(`[Config] Loaded ${activeSources.length} active sources (out of ${allSources.length} configured).`);
+
     // 1. Load existing data for persistence
     let existingPosts = [];
     if (fs.existsSync(OUTPUT_FILE)) {
@@ -163,31 +240,21 @@ export async function fetchAndSave() {
         }
     }
 
-    // PRE-CLEAN: Remove any posts with the "failed" placeholder OR untranslated English content from foreign sources
+    // PRE-CLEAN: Keep custom admin posts and posts belonging to currently enabled sources with valid content
+    const activeSourceNames = activeSources.map(s => s.name);
     let globalPosts = existingPosts.filter(p => {
-        const isFailed = !p.content || p.content.includes("無法擷取完整內容");
-        const isForeign = p.authorName && (
-            p.authorName.includes("The Hacker News") ||
-            p.authorName.includes("SecurityWeek") ||
-            p.authorName.includes("Dark Reading") ||
-            p.authorName.includes("BleepingComputer") ||
-            p.authorName.includes("Krebs") ||
-            p.authorName.includes("Threatpost") ||
-            p.authorName.includes("CyberScoop")
-        );
-        // Heuristic: If it's a foreign source and contains common English words like ' the ', it's likely untranslated
-        const isUntranslated = isForeign && p.content && p.content.toLowerCase().includes(" the ");
-
-        return !isFailed && !isUntranslated;
+        if (p.isCustom) return true;
+        const isFailed = !p.content || p.content === p.title || p.content.includes("無法擷取完整內容") || p.content.includes("無法擷取全文，請點擊標題查看。");
+        const isFromActiveSource = p.authorName && activeSourceNames.some(name => p.authorName.includes(name));
+        return !isFailed && isFromActiveSource;
     });
-    const initialCount = globalPosts.length;
 
     // Calculate the date 30 days ago
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    for (const source of SOURCES) {
-        console.log(`\n[${new Date().toISOString()}] Fetching RSS feed from: ${source.name}`);
+    for (const source of activeSources) {
+        console.log(`\n[${new Date().toISOString()}] Fetching RSS feed from: ${source.name} (${source.url})`);
         try {
             const feed = await parser.parseURL(source.url);
 
@@ -204,7 +271,7 @@ export async function fetchAndSave() {
                 const item = recentItems[i];
 
                 // 2. Check for keywords FIRST for categorization
-                let matchedCat = defaultCat; // Default to 'General' instead of null
+                let matchedCat = defaultCat;
                 const searchTarget = (item.title + ' ' + (item.contentSnippet || "")).toLowerCase();
 
                 for (const [keyword, data] of Object.entries(keywordTips)) {
@@ -213,11 +280,6 @@ export async function fetchAndSave() {
                         break;
                     }
                 }
-
-                // [OFF] Don't skip anymore! Just use matchedCat (which is defaultCat if no match)
-                // if (!matchedCat) {
-                //     continue;
-                // }
 
                 // 3. De-duplicate: If we already have this URL in our current pool, skip it
                 if (globalPosts.some(post => post.originalUrl === item.link)) {
@@ -230,7 +292,7 @@ export async function fetchAndSave() {
                 // FALLBACK: If scraping failed (403 or no paragraphs), use RSS snippet
                 if (!fullContent) {
                     console.log(`  -> Scraping failed or blocked, using RSS fallback.`);
-                    fullContent = item.contentSnippet || item.content || "無法擷取全文，請點擊標題查看。";
+                    fullContent = item.contentSnippet || item.content || "請點擊下方「查看原文」按鈕閱讀完整通告內容。";
                     // Strip HTML if fallback is HTML
                     if (fullContent.includes('<')) {
                         fullContent = fullContent.replace(/<[^>]*>?/gm, '').trim();
@@ -255,15 +317,15 @@ export async function fetchAndSave() {
                 }
 
                 globalPosts.push({
-                    id: Date.now() + Math.floor(Math.random() * 1000), // Better ID generation
+                    id: generateStableId(item.link || finalTitle),
                     authorName: `資安情報 · ${source.name}`,
                     authorIcon: matchedCat.icon,
                     category: matchedCat.category,
                     timeAgo: dateStr,
                     title: finalTitle,
                     content: fullContent,
-                    originalUrl: item.link, // Store for de-duplication
-                    pubDate: item.pubDate // Store raw date for aging
+                    originalUrl: item.link,
+                    pubDate: item.pubDate
                 });
 
                 // Brief delay to prevent overloading target servers and translation APIs
@@ -274,40 +336,35 @@ export async function fetchAndSave() {
         }
     }
 
-    // 4. PRUNING: Only keep data within the last 30 days
+    // 4. PRUNING: Keep custom posts and data within the last 30 days
     const prunedPosts = globalPosts.filter(post => {
+        if (post.isCustom) return true;
         if (!post.pubDate) return false;
         const d = new Date(post.pubDate);
         return !isNaN(d.getTime()) && d >= thirtyDaysAgo;
     });
 
-    // 5. SEMANTIC DEDUPLICATION (New per User Request)
-    // Filter out posts that have very similar titles or mention the same CVE
+    // 5. SEMANTIC DEDUPLICATION
     const uniquePosts = [];
     const seenTitles = new Set();
     const seenCVEs = new Set();
 
-    // Sort by source priority if desired, or just use what we have (already sorted by feed order)
     for (const post of prunedPosts) {
         const titleNormalized = post.title.toLowerCase().replace(/\s+/g, '').trim();
 
-        // Check for CVE pattern in title
         const cveMatch = post.title.match(/CVE-\d{4}-\d{4,7}/i);
         const cveId = cveMatch ? cveMatch[0].toUpperCase() : null;
 
         let isDuplicate = false;
 
-        // Rule 1: Exact/Near-exact normalized title exists
         if (seenTitles.has(titleNormalized)) {
             isDuplicate = true;
         }
 
-        // Rule 2: Same CVE ID mentioned in a major vulnerability report
         if (cveId && seenCVEs.has(cveId)) {
             isDuplicate = true;
         }
 
-        // Rule 3: Fuzzy title match (check if title contains significant portion of an existing title)
         if (!isDuplicate) {
             for (const prevTitle of seenTitles) {
                 if (titleNormalized.includes(prevTitle) || prevTitle.includes(titleNormalized)) {
@@ -326,13 +383,18 @@ export async function fetchAndSave() {
         }
     }
 
-    // 6. SORTING: Sort by date descending (newest first)
-    uniquePosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+    // 6. SORTING: Pinned posts first, then sort by date descending (newest first)
+    uniquePosts.sort((a, b) => {
+        if (Boolean(a.isPinned) !== Boolean(b.isPinned)) {
+            return a.isPinned ? -1 : 1;
+        }
+        return new Date(b.pubDate) - new Date(a.pubDate);
+    });
 
-    // Re-assign simple sequential IDs for the final JSON
-    const finalPosts = uniquePosts.map((post, idx) => ({
+    // 7. STABLE IDs: Assign deterministic ID based on originalUrl/title so bookmarks and view counts persist across fetches
+    const finalPosts = uniquePosts.map(post => ({
         ...post,
-        id: idx + 1
+        id: (post.isCustom && post.id) ? post.id : generateStableId(post.originalUrl || post.title)
     }));
 
     try {
