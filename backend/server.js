@@ -49,6 +49,11 @@ const DEFAULT_SITE_CONFIG = {
     ],
     schedule: {
         intervalHours: 6
+    },
+    ai: {
+        enabled: true,
+        apiKey: "",
+        model: "gemini-3.5-flash"
     }
 };
 
@@ -670,7 +675,7 @@ app.get('/api/admin/reports/generate', requireAuth, async (req, res) => {
         const cfg = getSiteConfig();
         const apiKey = cfg.ai?.apiKey || process.env.GEMINI_API_KEY || '';
         const aiEnabled = (cfg.ai?.enabled !== false) && !!apiKey;
-        const model = cfg.ai?.model || 'gemini-1.5-flash';
+        const model = cfg.ai?.model || 'gemini-3.5-flash';
 
         let posts = [];
         if (fs.existsSync(NEWS_PATH)) {
@@ -716,7 +721,7 @@ app.post('/api/admin/ai/re-analyze', requireAuth, async (req, res) => {
         const { id, title, content } = req.body;
         const cfg = getSiteConfig();
         const apiKey = cfg.ai?.apiKey || process.env.GEMINI_API_KEY;
-        const model = cfg.ai?.model || 'gemini-1.5-flash-latest';
+        const model = cfg.ai?.model || 'gemini-3.5-flash';
 
         if (!apiKey) {
             return res.status(400).json({ success: false, message: '尚未設定 Gemini API Key，無法進行 AI 研判' });
@@ -769,7 +774,7 @@ app.get('/api/admin/ai/config', requireAuth, (req, res) => {
         enabled: cfg.ai?.enabled ?? true,
         hasApiKey: !!apiKey,
         maskedKey: apiKey ? (apiKey.slice(0, 6) + '...' + apiKey.slice(-4)) : '',
-        model: cfg.ai?.model || 'gemini-1.5-flash',
+        model: cfg.ai?.model || 'gemini-3.5-flash',
         cacheStats: stats
     });
 });
@@ -791,7 +796,7 @@ app.post('/api/admin/ai/test', requireAuth, async (req, res) => {
     try {
         const cfg = getSiteConfig();
         const apiKey = req.body.apiKey || cfg.ai?.apiKey || process.env.GEMINI_API_KEY;
-        const model = req.body.model || cfg.ai?.model || 'gemini-1.5-flash';
+        const model = req.body.model || cfg.ai?.model || 'gemini-3.5-flash';
         if (!apiKey) {
             return res.status(400).json({ success: false, message: '尚未填寫 Gemini API Key' });
         }

@@ -1,6 +1,6 @@
 // backend/gemini-analyzer.js
 // Google Gemini AI 智慧資安深度分析模組
-// 具備模型自動適配、版本自動探測 (v1beta/v1)、快取、平滑降級
+// 支援 2026 最新旗艦 Gemini 3.5 Flash / 2.5 Flash 模型、快取、平滑降級
 
 import fs from 'fs';
 import path from 'path';
@@ -57,12 +57,27 @@ export function cleanAndValidateApiKey(key) {
     if (!key) throw new Error('請提供 API Key');
     const cleaned = String(key).trim().replace(/^['"`]|['"`]$/g, '').replace(/^Bearer\s+/i, '').trim();
     if (/[\u4e00-\u9fa5]/.test(cleaned) || cleaned.includes('連線失敗') || cleaned.includes('API 驗證失敗')) {
-        throw new Error('您輸入的內容包含中文字或提示文字，並非真正的 Gemini API Key。請注意：標準 API Key 是以「AIzaSy」開頭的 39 碼英數字串！');
+        throw new Error('您輸入的內容包含中文字或提示文字，並非真正的 Gemini API Key。請注意：標準 API Key 是以「AIzaSy」或「AQ.」開頭的英數字串！');
     }
     if (cleaned.length < 20) {
-        throw new Error('輸入的金鑰長度過短，請確認已完整複製以「AIzaSy」開頭的字串。');
+        throw new Error('輸入的金鑰長度過短，請確認已完整複製金鑰。');
     }
     return cleaned;
+}
+
+/**
+ * 智慧模型適配：支援現行活躍的 3.5-flash 與 2.5-flash
+ */
+export function resolveModel(model) {
+    if (!model) return 'gemini-3.5-flash';
+    const m = String(model).trim().toLowerCase();
+    if (m.includes('3.5') || m.includes('3.1') || m.includes('flash')) {
+        return 'gemini-3.5-flash';
+    }
+    if (m.includes('pro')) {
+        return 'gemini-3.5-flash'; // 優先使用高可用之 flash 避免 pro 額度或棄用限制
+    }
+    return 'gemini-3.5-flash';
 }
 
 /**
@@ -70,20 +85,17 @@ export function cleanAndValidateApiKey(key) {
  */
 export async function fetchAvailableModels(apiKey) {
     if (!apiKey) return [];
-    const key = cleanAndValidateApiKey(apiKey);
-    for (const ver of ['v1beta', 'v1']) {
-        try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${apiKey}`);
-            if (res.ok) {
-                const data = await res.json();
-                const list = (data.models || [])
-                    .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-                    .map(m => m.name.replace(/^models\//, ''));
-                if (list.length > 0) return list;
-            }
-        } catch (e) {
-            console.warn(`[Gemini AI] ListModels ${ver} warning:`, e.message);
+    try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (res.ok) {
+            const data = await res.json();
+            const list = (data.models || [])
+                .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+                .map(m => m.name.replace(/^models\//, ''));
+            if (list.length > 0) return list;
         }
+    } catch (e) {
+        console.warn(`[Gemini AI] ListModels warning:`, e.message);
     }
     return [];
 }
@@ -91,97 +103,68 @@ export async function fetchAvailableModels(apiKey) {
 /**
  * 測試 Gemini API Key 連線並自動適配最佳模型
  */
-export async function testGeminiApiKey(rawApiKey, requestedModel = 'gemini-1.5-flash') {
+export async function testGeminiApiKey(rawApiKey, requestedModel = 'gemini-3.5-flash') {
     const apiKey = cleanAndValidateApiKey(rawApiKey);
+    const targetModel = resolveModel(requestedModel);
 
-    // 1. 優先向 Google 查詢該 Key 真正開通了哪些模型
-    const availableModels = await fetchAvailableModels(apiKey);
-
-    // 常見支援模型列表（依優先級排序）
-    const fallbackList = [
-        requestedModel,
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-flash-002',
-        'gemini-1.5-flash-001',
-        'gemini-1.5-flash',
-        'gemini-2.0-flash-exp',
-        'gemini-1.5-pro-latest',
-        'gemini-1.5-pro',
-        'gemini-pro'
-    ];
-
-    let candidateModels = [];
-    if (availableModels.length > 0) {
-        if (availableModels.includes(requestedModel)) {
-            candidateModels = [requestedModel, ...availableModels.filter(m => m !== requestedModel)];
-        } else {
-            const preferred = availableModels.find(m => m.includes('1.5-flash'))
-                || availableModels.find(m => m.includes('flash'))
-                || availableModels.find(m => m.includes('pro'))
-                || availableModels[0];
-            candidateModels = [preferred, ...availableModels.filter(m => m !== preferred)];
-        }
-    } else {
-        candidateModels = fallbackList;
-    }
+    const candidateModels = Array.from(new Set([
+        targetModel,
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-flash-latest'
+    ]));
 
     let lastError = null;
     let successfulModel = null;
     let replyText = null;
 
-    // 依序嘗試候選模型與 API 版本 (v1beta / v1)
-    for (const model of candidateModels.slice(0, 6)) {
-        for (const ver of ['v1beta', 'v1']) {
-            try {
-                const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${apiKey}`;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [
-                            { parts: [{ text: '請回覆「連線成功！Gemini AI 資安模組運作正常。」這句話即可。' }] }
-                        ],
-                        generationConfig: {
-                            temperature: 0.1,
-                            maxOutputTokens: 50
-                        }
-                    })
-                });
+    for (const model of candidateModels) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [
+                        { parts: [{ text: '請回覆「連線成功！Gemini AI 資安模組運作正常。」這句話即可。' }] }
+                    ],
+                    generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 200
+                    }
+                })
+            });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    replyText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '連線成功';
-                    successfulModel = model;
-                    break;
-                } else {
-                    const errJson = await response.json().catch(() => ({}));
-                    lastError = errJson.error?.message || `HTTP ${response.status} ${response.statusText}`;
-                }
-            } catch (e) {
-                lastError = e.message;
+            if (response.ok) {
+                const data = await response.json();
+                const parts = data.candidates?.[0]?.content?.parts;
+                replyText = (parts && parts.find(p => p.text)?.text)?.trim() || '連線成功';
+                successfulModel = model;
+                break;
+            } else {
+                const errJson = await response.json().catch(() => ({}));
+                lastError = errJson.error?.message || `HTTP ${response.status} ${response.statusText}`;
             }
+        } catch (e) {
+            lastError = e.message;
         }
-        if (replyText) break;
     }
 
     if (!replyText) {
-        const hint = availableModels.length > 0
-            ? `（偵測到可用模型為：${availableModels.slice(0, 5).join('、')}）`
-            : '（請確認該專案已開通 Generative Language API，或重新於 aistudio.google.com 建立 API Key）';
-        throw new Error(`API 驗證失敗: ${lastError} ${hint}`);
+        throw new Error(`API 驗證失敗: ${lastError}`);
     }
 
     return {
         reply: replyText,
-        activeModel: successfulModel,
-        availableModels
+        activeModel: successfulModel
     };
 }
 
 /**
  * 使用 Gemini AI 深度分析單則資安情資（支援自動重試可用模型）
  */
-export async function analyzePostWithGemini(post, rawApiKey, requestedModel = 'gemini-1.5-flash') {
+export async function analyzePostWithGemini(post, rawApiKey, requestedModel = 'gemini-3.5-flash') {
     if (!post || !rawApiKey) return null;
     let apiKey;
     try {
@@ -224,25 +207,21 @@ JSON 格式規範：
 }
 `;
 
-    // 候選模型清單
-    const candidateModels = [
-        requestedModel,
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-flash-002',
-        'gemini-1.5-flash-001',
-        'gemini-1.5-flash',
-        'gemini-2.0-flash-exp',
-        'gemini-1.5-pro-latest',
-        'gemini-1.5-pro',
-        'gemini-pro'
-    ];
+    const primaryModel = resolveModel(requestedModel);
+    const candidateModels = Array.from(new Set([
+        primaryModel,
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-flash-latest'
+    ]));
 
     let lastError = null;
 
     for (const model of candidateModels) {
-        for (const ver of ['v1beta', 'v1']) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
             try {
-                const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${apiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -250,23 +229,30 @@ JSON 格式規範：
                         contents: [{ parts: [{ text: prompt }] }],
                         generationConfig: {
                             temperature: 0.2,
-                            maxOutputTokens: 600,
+                            maxOutputTokens: 2000,
                             responseMimeType: 'application/json'
                         }
                     })
                 });
 
+                if (response.status === 429 || response.status === 503) {
+                    const errJson = await response.json().catch(() => ({}));
+                    lastError = errJson.error?.message || `HTTP ${response.status}`;
+                    console.warn(`[Gemini AI] Model ${model} ${response.status}, waiting 1.2s before retry...`);
+                    await new Promise(r => setTimeout(r, 1200));
+                    continue;
+                }
+
                 if (!response.ok) {
                     const errJson = await response.json().catch(() => ({}));
                     lastError = errJson.error?.message || `HTTP ${response.status}`;
-                    if (response.status === 404 || (lastError && lastError.includes('not found'))) {
-                        continue; // 嘗試下一個模型
-                    }
-                    throw new Error(lastError);
+                    console.warn(`[Gemini AI] Model ${model} returned error: ${lastError}`);
+                    break;
                 }
 
                 const data = await response.json();
-                const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                const parts = data.candidates?.[0]?.content?.parts;
+                const rawText = (parts && parts.find(p => p.text)?.text)?.trim() || '';
                 const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
                 const result = JSON.parse(cleanJson);
 
@@ -296,11 +282,12 @@ JSON 格式規範：
 /**
  * 批次處理並進行延遲控制
  */
-export async function batchAnalyzePostsWithGemini(posts, apiKey, model = 'gemini-1.5-flash', onProgress = null) {
+export async function batchAnalyzePostsWithGemini(posts, apiKey, model = 'gemini-3.5-flash', onProgress = null) {
     if (!apiKey || !Array.isArray(posts) || posts.length === 0) return [];
 
     const results = [];
     const cache = getAiCache();
+    const resolvedModel = resolveModel(model);
 
     for (let i = 0; i < posts.length; i++) {
         const post = posts[i];
@@ -313,12 +300,12 @@ export async function batchAnalyzePostsWithGemini(posts, apiKey, model = 'gemini
         }
 
         try {
-            const analyzed = await analyzePostWithGemini(post, apiKey, model);
+            const analyzed = await analyzePostWithGemini(post, apiKey, resolvedModel);
             results.push(analyzed);
             if (onProgress) onProgress(i + 1, posts.length, false);
 
             if (i < posts.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 600));
+                await new Promise(resolve => setTimeout(resolve, 800));
             }
         } catch (e) {
             console.error(`[Gemini AI] Analysis error on post ${post.id}:`, e.message);

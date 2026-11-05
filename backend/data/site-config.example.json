@@ -20,14 +20,14 @@
     "scheduleDay": 1,
     "scheduleHour": 9,
     "scheduleMinute": 0,
-    "smtpHost": "hota-mail.hota.com.tw",
+    "smtpHost": "smtp.example.com",
     "smtpPort": 587,
     "smtpSecure": false,
-    "smtpUser": "it-05",
-    "smtpPass": "Ht@01288",
+    "smtpUser": "",
+    "smtpPass": "",
     "senderName": "生活資安觀測站 · 資安小組",
-    "senderEmail": "it-05@hota.com.tw",
-    "recipients": "squall-lin@hota.com.tw",
+    "senderEmail": "security@example.com",
+    "recipients": "team@example.com",
     "attachCsv": false,
     "lastSentTime": null,
     "lastSentStatus": null
@@ -35,6 +35,6 @@
   "ai": {
     "enabled": true,
     "apiKey": "",
-    "model": "gemini-1.5-flash-latest"
+    "model": "gemini-3.5-flash"
   }
 }

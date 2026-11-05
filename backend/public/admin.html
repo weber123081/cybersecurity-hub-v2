@@ -254,11 +254,10 @@
                                 </button>
                             </div>
                             <select v-model="aiConfig.model" class="px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (自動最新 · 推薦)</option>
-                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (標準)</option>
-                                <option value="gemini-1.5-flash-002">Gemini 1.5 Flash 002</option>
-                                <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (自動最新 · 深度推理)</option>
-                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (標準)</option>
+                                <option value="gemini-3.5-flash">Gemini 3.5 Flash (推薦 · 深度推理)</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                                <option value="gemini-flash-latest">Gemini Flash (自動最新版)</option>
                             </select>
                             <button @click="saveAiConfig" :disabled="isSavingAi"
                                 class="px-3 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer">
@@ -1988,7 +1987,7 @@ all-staff@company.com"
                     enabled: true,
                     hasApiKey: false,
                     maskedKey: '',
-                    model: 'gemini-1.5-flash',
+                    model: 'gemini-2.5-flash',
                     cacheStats: { totalCached: 0 }
                 });
                 const aiKeyInput = ref('');
