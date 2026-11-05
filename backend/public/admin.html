@@ -459,16 +459,95 @@
                     </div>
                 </div>
 
-                <!-- Collapsible Existing Posts Manager -->
-                <div v-if="showPostList" class="border-t border-gray-200 pt-4">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-3">
-                        <span class="text-sm font-semibold text-gray-700">現有情報與公告列表 (共 {{ filteredPosts.length }} 篇)</span>
-                        <input v-model="postSearchQuery" type="text" placeholder="搜尋文章標題或來源..."
-                            class="w-full md:w-64 px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <!-- Posts Manager Header & Filter Toolbar -->
+                <div class="border-t border-gray-200 pt-4">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm">
+                        <!-- Quick Category Filter Chips -->
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button v-for="cat in ['全部', '📌 置頂', '📢 內部公告', '企業防護', '漏洞預警', '系統弱點', '詐騙防範', '綜合動態']" :key="cat"
+                                @click="postCategoryFilter = cat; postCurrentPage = 1"
+                                :class="['px-2.5 py-1 text-xs rounded-lg font-semibold transition-all cursor-pointer', postCategoryFilter === cat ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200']">
+                                {{ cat }}
+                            </button>
+                        </div>
+
+                        <!-- Search and View Mode Switch -->
+                        <div class="flex items-center space-x-2 w-full md:w-auto">
+                            <div class="relative flex-1 md:w-64">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-gray-400"></i>
+                                <input v-model="postSearchQuery" @input="postCurrentPage = 1" type="text" placeholder="搜尋標題、內容或來源..."
+                                    class="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <div class="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200 shrink-0">
+                                <button @click="postViewMode = 'table'"
+                                    :class="['px-2.5 py-1 text-xs rounded-md font-semibold transition-all', postViewMode === 'table' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-800']"
+                                    title="緊湊表格模式 (一頁 10 筆，不需滾輪一直滑)">
+                                    <i class="fa-solid fa-table-list mr-1"></i>表格
+                                </button>
+                                <button @click="postViewMode = 'cards'"
+                                    :class="['px-2.5 py-1 text-xs rounded-md font-semibold transition-all', postViewMode === 'cards' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-800']"
+                                    title="卡片模式">
+                                    <i class="fa-solid fa-grip-vertical mr-1"></i>卡片
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="max-h-80 overflow-y-auto space-y-2 pr-1">
-                        <div v-for="post in filteredPosts" :key="post.id"
-                            :class="['p-3 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-2', post.isPinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200']">
+
+                    <!-- 1. Posts Table View (Compact, High Density, Zero Scroll Exhaustion) -->
+                    <div v-if="postViewMode === 'table'" class="overflow-x-auto bg-white rounded-xl border border-gray-200 shadow-sm mb-4">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">標題與簡介</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 w-28">分類</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 w-36">來源單位</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 w-32">發布日期</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 w-36">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="post in paginatedPosts" :key="post.id"
+                                    :class="['hover:bg-indigo-50/40 transition-colors', post.isPinned ? 'bg-amber-50/60' : '']">
+                                    <td class="px-4 py-3 text-xs">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span v-if="post.isPinned" class="px-1.5 py-0.5 rounded text-[11px] font-bold bg-amber-200 text-amber-900">📌 置頂</span>
+                                            <span v-if="post.isCustom" class="px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-100 text-indigo-800">內部公告</span>
+                                            <span class="font-semibold text-gray-800 line-clamp-1" :title="post.title">{{ post.title }}</span>
+                                        </div>
+                                        <p class="text-gray-400 line-clamp-1 mt-0.5 text-[11px]">{{ post.content ? post.content.slice(0, 80) + '...' : '' }}</p>
+                                    </td>
+                                    <td class="px-4 py-3 text-xs whitespace-nowrap">
+                                        <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">{{ post.category }}</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                                        {{ post.author?.name || post.authorName || '站內情報' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-xs text-gray-400 whitespace-nowrap font-mono">
+                                        {{ post.timestamp ? new Date(post.timestamp).toLocaleDateString('zh-TW') : (post.timeAgo || '-') }}
+                                    </td>
+                                    <td class="px-4 py-3 text-xs whitespace-nowrap text-right space-x-1.5">
+                                        <button @click="togglePinPost(post)"
+                                            :class="['px-2 py-1 text-xs rounded transition-colors', post.isPinned ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200']">
+                                            <i class="fa-solid fa-thumbtack mr-0.5"></i>{{ post.isPinned ? '取消' : '置頂' }}
+                                        </button>
+                                        <button @click="deletePost(post)"
+                                            class="px-2 py-1 text-xs rounded text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
+                                            <i class="fa-solid fa-trash mr-0.5"></i>刪除
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr v-if="paginatedPosts.length === 0">
+                                    <td colspan="5" class="px-4 py-10 text-center text-xs text-gray-400 italic">找不到符合條件的文章</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 2. Posts Card View (Paginated Cards) -->
+                    <div v-else class="space-y-2 mb-4">
+                        <div v-for="post in paginatedPosts" :key="post.id"
+                            :class="['p-3.5 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-sm', post.isPinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200']">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center flex-wrap gap-1.5">
                                     <span v-if="post.isPinned" class="text-xs px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-semibold">📌 置頂</span>
@@ -477,7 +556,7 @@
                                     <span class="font-medium text-sm text-gray-800 truncate" :title="post.title">{{ post.title }}</span>
                                 </div>
                                 <p class="text-xs text-gray-400 mt-1">
-                                    來源：{{ post.author?.name || '未知' }} ｜ 發布於：{{ new Date(post.timestamp).toLocaleString('zh-TW') }}
+                                    來源：{{ post.author?.name || post.authorName || '未知' }} ｜ 發布於：{{ post.timestamp ? new Date(post.timestamp).toLocaleString('zh-TW') : (post.timeAgo || '-') }}
                                 </p>
                             </div>
                             <div class="flex items-center space-x-2 shrink-0">
@@ -491,8 +570,34 @@
                                 </button>
                             </div>
                         </div>
-                        <div v-if="filteredPosts.length === 0" class="text-center py-6 text-sm text-gray-400 italic">
+                        <div v-if="paginatedPosts.length === 0" class="text-center py-10 text-sm text-gray-400 italic">
                             找不到符合條件的文章
+                        </div>
+                    </div>
+
+                    <!-- Posts Pagination Bar (1-Click Paging) -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-xs text-gray-600">
+                        <div class="flex items-center gap-2">
+                            <span>顯示第 {{ postStartIndex + 1 }} 至 {{ Math.min(postStartIndex + postPageSize, filteredPosts.length) }} 筆（共 {{ filteredPosts.length }} 篇符合）</span>
+                            <select v-model.number="postPageSize" @change="postCurrentPage = 1" class="border border-gray-300 rounded px-2 py-1 bg-gray-50 text-indigo-700 font-semibold focus:outline-none">
+                                <option :value="10">每頁 10 筆 (建議)</option>
+                                <option :value="20">每頁 20 筆</option>
+                                <option :value="50">每頁 50 筆</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center space-x-1.5">
+                            <button @click="postCurrentPage = Math.max(1, postCurrentPage - 1)" :disabled="postCurrentPage <= 1"
+                                class="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors">
+                                <i class="fa-solid fa-chevron-left mr-1"></i>上一頁
+                            </button>
+                            <span class="px-3.5 py-1 font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg">
+                                第 {{ postCurrentPage }} / {{ postTotalPages }} 頁
+                            </span>
+                            <button @click="postCurrentPage = Math.min(postTotalPages, postCurrentPage + 1)" :disabled="postCurrentPage >= postTotalPages"
+                                class="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors">
+                                下一頁<i class="fa-solid fa-chevron-right ml-1"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -564,17 +669,117 @@
                     </div>
                 </div>
 
-                <!-- Collapsible Existing Dictionary Manager -->
-                <div v-if="showDictList" class="border-t border-gray-200 pt-4">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-3">
-                        <span class="text-sm font-semibold text-gray-700">現有詞彙列表 (共 {{ filteredDictionary.length }} 則)</span>
-                        <input v-model="dictSearchQuery" type="text" placeholder="搜尋詞彙名稱或定義..."
-                            class="w-full md:w-64 px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <!-- Dictionary Header & Filter Toolbar -->
+                <div class="border-t border-gray-200 pt-4">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm">
+                        <div class="flex items-center gap-2 text-xs text-gray-600 font-medium">
+                            <i class="fa-solid fa-lightbulb text-amber-500"></i>
+                            <span>設定的防護要點將自動納入前台首頁右側欄「今日資安小提醒」隨機輪播</span>
+                        </div>
+
+                        <div class="flex items-center space-x-2 w-full md:w-auto">
+                            <div class="relative flex-1 md:w-64">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-gray-400"></i>
+                                <input v-model="dictSearchQuery" @input="dictCurrentPage = 1" type="text" placeholder="搜尋詞彙名稱、定義或防護提示..."
+                                    class="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <div class="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200 shrink-0">
+                                <button @click="dictViewMode = 'table'"
+                                    :class="['px-2.5 py-1 text-xs rounded-md font-semibold transition-all', dictViewMode === 'table' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-800']"
+                                    title="緊湊表格模式 (一頁 10 則，輕鬆閱覽)">
+                                    <i class="fa-solid fa-table-list mr-1"></i>表格
+                                </button>
+                                <button @click="dictViewMode = 'cards'"
+                                    :class="['px-2.5 py-1 text-xs rounded-md font-semibold transition-all', dictViewMode === 'cards' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-800']"
+                                    title="卡片模式">
+                                    <i class="fa-solid fa-grip-vertical mr-1"></i>卡片
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="max-h-96 overflow-y-auto space-y-3 pr-1">
-                        <div v-for="item in filteredDictionary" :key="item.id"
-                            class="p-4 rounded-xl border border-gray-200 bg-white">
-                            <!-- Normal Mode -->
+
+                    <!-- 1. Dictionary Table View (Compact Table, No Endless Scrolling) -->
+                    <div v-if="dictViewMode === 'table'" class="overflow-x-auto bg-white rounded-xl border border-gray-200 shadow-sm mb-4">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 w-60">資安術語名稱</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">概念定義與解說</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 w-32">防護要點數</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 w-32">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <template v-for="item in paginatedDictionary" :key="item.id">
+                                    <tr v-if="editingDictId !== item.id" class="hover:bg-indigo-50/40 transition-colors">
+                                        <td class="px-4 py-3 text-xs font-bold text-gray-800 whitespace-nowrap">
+                                            <i class="fa-solid fa-bookmark text-indigo-500 mr-1.5"></i>{{ item.term }}
+                                        </td>
+                                        <td class="px-4 py-3 text-xs text-gray-600">
+                                            <p class="line-clamp-2 leading-relaxed" :title="item.definition">{{ item.definition }}</p>
+                                        </td>
+                                        <td class="px-4 py-3 text-xs text-center whitespace-nowrap">
+                                            <span class="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-200">
+                                                💡 {{ item.tips ? item.tips.length : 0 }} 則提示
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 text-xs whitespace-nowrap text-right space-x-1.5">
+                                            <button @click="startEditDict(item)" class="px-2 py-1 text-xs rounded text-gray-700 bg-gray-100 hover:bg-gray-200 font-medium">
+                                                <i class="fa-solid fa-pen mr-0.5"></i>編輯
+                                            </button>
+                                            <button @click="deleteDictEntry(item)" class="px-2 py-1 text-xs rounded text-red-600 bg-red-50 hover:bg-red-100 font-medium">
+                                                <i class="fa-solid fa-trash mr-0.5"></i>刪除
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <!-- Editing in Table Row -->
+                                    <tr v-else class="bg-indigo-50/40">
+                                        <td colspan="4" class="p-4">
+                                            <div class="space-y-3 bg-white p-4 rounded-xl border border-indigo-200 shadow-sm">
+                                                <div class="font-bold text-sm text-indigo-700 flex items-center">
+                                                    <i class="fa-solid fa-pen-to-square mr-1.5"></i>正在編輯：{{ item.term }}
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs text-gray-500 mb-1">術語名稱</label>
+                                                    <input v-model="editDictForm.term" type="text"
+                                                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs text-gray-500 mb-1">定義說明</label>
+                                                    <textarea v-model="editDictForm.definition" rows="3"
+                                                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs text-gray-500 mb-1">防護要點 (每行一條)</label>
+                                                    <textarea v-model="editDictForm.tipsText" rows="3"
+                                                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                                                </div>
+                                                <div class="flex justify-end space-x-2 pt-1">
+                                                    <button @click="editingDictId = null"
+                                                        class="px-3.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                                        取消
+                                                    </button>
+                                                    <button @click="saveEditDict(item.id)"
+                                                        class="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">
+                                                        <i class="fa-solid fa-check mr-1"></i>儲存修改
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr v-if="paginatedDictionary.length === 0">
+                                    <td colspan="4" class="px-4 py-10 text-center text-xs text-gray-400 italic">找不到符合條件的詞彙</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 2. Dictionary Card View (Alternative Mode) -->
+                    <div v-else class="space-y-3 mb-4">
+                        <div v-for="item in paginatedDictionary" :key="item.id"
+                            class="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                             <div v-if="editingDictId !== item.id">
                                 <div class="flex items-start justify-between gap-2 mb-2">
                                     <h4 class="font-bold text-gray-800 text-sm flex items-center">
@@ -600,7 +805,6 @@
                                 </div>
                             </div>
 
-                            <!-- Editing Mode -->
                             <div v-else class="space-y-3">
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1">術語名稱</label>
@@ -629,8 +833,34 @@
                                 </div>
                             </div>
                         </div>
-                        <div v-if="filteredDictionary.length === 0" class="text-center py-6 text-sm text-gray-400 italic">
+                        <div v-if="paginatedDictionary.length === 0" class="text-center py-10 text-sm text-gray-400 italic">
                             找不到符合條件的詞彙
+                        </div>
+                    </div>
+
+                    <!-- Dictionary Pagination Bar -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm text-xs text-gray-600">
+                        <div class="flex items-center gap-2">
+                            <span>顯示第 {{ dictStartIndex + 1 }} 至 {{ Math.min(dictStartIndex + dictPageSize, filteredDictionary.length) }} 則（共 {{ filteredDictionary.length }} 則符合）</span>
+                            <select v-model.number="dictPageSize" @change="dictCurrentPage = 1" class="border border-gray-300 rounded px-2 py-1 bg-gray-50 text-indigo-700 font-semibold focus:outline-none">
+                                <option :value="10">每頁 10 則 (建議)</option>
+                                <option :value="20">每頁 20 則</option>
+                                <option :value="50">每頁 50 則</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center space-x-1.5">
+                            <button @click="dictCurrentPage = Math.max(1, dictCurrentPage - 1)" :disabled="dictCurrentPage <= 1"
+                                class="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors">
+                                <i class="fa-solid fa-chevron-left mr-1"></i>上一頁
+                            </button>
+                            <span class="px-3.5 py-1 font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg">
+                                第 {{ dictCurrentPage }} / {{ dictTotalPages }} 頁
+                            </span>
+                            <button @click="dictCurrentPage = Math.min(dictTotalPages, dictCurrentPage + 1)" :disabled="dictCurrentPage >= dictTotalPages"
+                                class="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors">
+                                下一頁<i class="fa-solid fa-chevron-right ml-1"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1165,14 +1395,23 @@
                 const editingDictId = ref(null);
                 const editDictForm = ref({ term: '', definition: '', tipsText: '' });
 
+                const dictCurrentPage = ref(1);
+                const dictPageSize = ref(10);
+                const dictViewMode = ref('table'); // 'table' | 'cards'
+
                 const filteredDictionary = computed(() => {
                     const q = dictSearchQuery.value.trim().toLowerCase();
                     if (!q) return dictionary.value;
                     return dictionary.value.filter(d =>
                         (d.term && d.term.toLowerCase().includes(q)) ||
-                        (d.definition && d.definition.toLowerCase().includes(q))
+                        (d.definition && d.definition.toLowerCase().includes(q)) ||
+                        (Array.isArray(d.tips) && d.tips.some(t => t.toLowerCase().includes(q)))
                     );
                 });
+
+                const dictTotalPages = computed(() => Math.ceil(filteredDictionary.value.length / dictPageSize.value) || 1);
+                const dictStartIndex = computed(() => (dictCurrentPage.value - 1) * dictPageSize.value);
+                const paginatedDictionary = computed(() => filteredDictionary.value.slice(dictStartIndex.value, dictStartIndex.value + dictPageSize.value));
 
                 const fetchDictionary = async () => {
                     try {
@@ -1275,15 +1514,37 @@
                     isPinned: true
                 });
 
+                const postCurrentPage = ref(1);
+                const postPageSize = ref(10);
+                const postCategoryFilter = ref('全部');
+                const postViewMode = ref('table'); // 'table' | 'cards'
+
                 const filteredPosts = computed(() => {
+                    let result = posts.value;
+                    if (postCategoryFilter.value === '📌 置頂') {
+                        result = result.filter(p => p.isPinned);
+                    } else if (postCategoryFilter.value === '📢 內部公告') {
+                        result = result.filter(p => p.isCustom);
+                    } else if (postCategoryFilter.value !== '全部') {
+                        result = result.filter(p => p.category === postCategoryFilter.value);
+                    }
+
                     const q = postSearchQuery.value.trim().toLowerCase();
-                    if (!q) return posts.value;
-                    return posts.value.filter(p =>
-                        (p.title && p.title.toLowerCase().includes(q)) ||
-                        (p.author?.name && p.author.name.toLowerCase().includes(q)) ||
-                        (p.category && p.category.toLowerCase().includes(q))
-                    );
+                    if (q) {
+                        result = result.filter(p =>
+                            (p.title && p.title.toLowerCase().includes(q)) ||
+                            (p.content && p.content.toLowerCase().includes(q)) ||
+                            (p.author?.name && p.author.name.toLowerCase().includes(q)) ||
+                            (p.authorName && p.authorName.toLowerCase().includes(q)) ||
+                            (p.category && p.category.toLowerCase().includes(q))
+                        );
+                    }
+                    return result;
                 });
+
+                const postTotalPages = computed(() => Math.ceil(filteredPosts.value.length / postPageSize.value) || 1);
+                const postStartIndex = computed(() => (postCurrentPage.value - 1) * postPageSize.value);
+                const paginatedPosts = computed(() => filteredPosts.value.slice(postStartIndex.value, postStartIndex.value + postPageSize.value));
 
                 const fetchPosts = async () => {
                     try {
@@ -1814,6 +2075,12 @@
                     editingDictId,
                     editDictForm,
                     filteredDictionary,
+                    paginatedDictionary,
+                    dictCurrentPage,
+                    dictPageSize,
+                    dictTotalPages,
+                    dictStartIndex,
+                    dictViewMode,
                     addDictEntry,
                     startEditDict,
                     saveEditDict,
@@ -1825,6 +2092,13 @@
                     postMessage,
                     newPost,
                     filteredPosts,
+                    paginatedPosts,
+                    postCurrentPage,
+                    postPageSize,
+                    postTotalPages,
+                    postStartIndex,
+                    postCategoryFilter,
+                    postViewMode,
                     publishCustomPost,
                     togglePinPost,
                     deletePost,
