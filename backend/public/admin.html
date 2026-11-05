@@ -223,6 +223,57 @@
                         </div>
                     </div>
 
+                    <!-- Gemini AI Intelligent Analysis Settings Card -->
+                    <div class="bg-gradient-to-r from-indigo-50/90 via-sky-50/80 to-blue-50/90 p-4 rounded-xl border border-indigo-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-sky-600 text-white flex items-center justify-center text-lg shadow-sm flex-shrink-0">
+                                <i class="fa-solid fa-brain"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                                        Google Gemini AI 深度思考研判
+                                    </span>
+                                    <span :class="['text-xs px-2 py-0.5 rounded-full font-bold', aiConfig.hasApiKey && aiConfig.enabled ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-gray-100 text-gray-600 border border-gray-300']">
+                                        {{ aiConfig.hasApiKey && aiConfig.enabled ? '🟢 AI 深度分析中' : '⚪ 規則引擎備援' }}
+                                    </span>
+                                    <span class="text-[11px] text-gray-500 font-medium">（已快取 {{ aiConfig.cacheStats?.totalCached || 0 }} 則 AI 結論）</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mt-1">
+                                    啟用後，「可能之影響」與「因應方案」將由 Gemini 進行深度邏輯思考與客製分析；若未填 API Key 或斷網，系統將自動平滑降級為規則引擎。
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <div class="relative">
+                                <input :type="showAiKey ? 'text' : 'password'" v-model="aiKeyInput" :placeholder="aiConfig.hasApiKey ? '已設定金鑰 (留空保持不變)' : '輸入 Gemini API Key (AIzaSy...)'"
+                                    class="w-56 px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono pr-7">
+                                <button @click="showAiKey = !showAiKey" type="button" class="absolute right-2 top-2 text-gray-400 hover:text-gray-600 text-xs">
+                                    <i :class="['fa-solid', showAiKey ? 'fa-eye-slash' : 'fa-eye']"></i>
+                                </button>
+                            </div>
+                            <select v-model="aiConfig.model" class="px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (推薦·每日1500次免費)</option>
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (深度推理·每日50次免費)</option>
+                            </select>
+                            <button @click="saveAiConfig" :disabled="isSavingAi"
+                                class="px-3 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                <span>{{ isSavingAi ? '儲存中...' : '儲存' }}</span>
+                            </button>
+                            <button @click="testAiConnection" :disabled="isTestingAi"
+                                class="px-3 py-1.5 text-xs font-bold bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer">
+                                <i :class="['fa-solid', isTestingAi ? 'fa-spinner fa-spin' : 'fa-plug-circle-check']"></i>
+                                <span>{{ isTestingAi ? '測試中...' : '測試連線' }}</span>
+                            </button>
+                            <button v-if="aiConfig.cacheStats?.totalCached > 0" @click="clearAiCacheConfirm"
+                                class="px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="清空 AI 快取，讓下次產出時全數重新由 AI 推理">
+                                <i class="fa-solid fa-trash-can mr-1"></i>清空快取
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Self-Service Checkbox Settings Section -->
                     <div class="bg-gray-50/90 p-4 rounded-xl border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
                         <!-- Column 1: 收錄篩選設定 -->
@@ -404,7 +455,10 @@
                                         </span>
                                     </td>
                                     <td v-if="reportColumns.desc" class="py-3 px-3 align-top leading-relaxed text-gray-800 break-words">
-                                        <div class="font-medium text-gray-900">{{ row.description }}</div>
+                                        <div class="font-medium text-gray-900">{{ row.description }}
+                                            <span v-if="row.isAiGenerated" class="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-0.5 rounded ml-1 border border-indigo-200" title="此情資之可能影響與因應方案經 Gemini AI 深度思考研判">
+                                                <i class="fa-solid fa-brain"></i> AI研判
+                                            </span></div>
                                         <div v-if="row.cves && row.cves.length > 0" class="mt-1 flex flex-wrap gap-1">
                                             <span v-for="c in row.cves" :key="c" class="px-1.5 py-0.2 rounded text-[10px] bg-red-50 text-red-700 font-mono font-bold border border-red-200 whitespace-nowrap">
                                                 {{ c }}
@@ -1917,6 +1971,96 @@ all-staff@company.com"
                 });
 
                 // Self-service checkbox filters
+                // Gemini AI Config & State
+                const aiConfig = ref({
+                    enabled: true,
+                    hasApiKey: false,
+                    maskedKey: '',
+                    model: 'gemini-1.5-flash',
+                    cacheStats: { totalCached: 0 }
+                });
+                const aiKeyInput = ref('');
+                const showAiKey = ref(false);
+                const isSavingAi = ref(false);
+                const isTestingAi = ref(false);
+
+                const fetchAiConfig = async () => {
+                    try {
+                        const res = await fetch('/api/admin/ai/config');
+                        if (res.ok) {
+                            const data = await res.json();
+                            aiConfig.value = data;
+                        }
+                    } catch (e) {
+                        console.error('Failed to load AI config:', e);
+                    }
+                };
+
+                const saveAiConfig = async () => {
+                    isSavingAi.value = true;
+                    try {
+                        const res = await fetch('/api/admin/ai/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                enabled: aiConfig.value.enabled,
+                                apiKey: aiKeyInput.value.trim(),
+                                model: aiConfig.value.model
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            alert('Gemini AI 設定已成功儲存！');
+                            aiKeyInput.value = '';
+                            fetchAiConfig();
+                        } else {
+                            alert('儲存失敗：' + data.message);
+                        }
+                    } catch (e) {
+                        alert('儲存失敗：' + e.message);
+                    } finally {
+                        isSavingAi.value = false;
+                    }
+                };
+
+                const testAiConnection = async () => {
+                    isTestingAi.value = true;
+                    try {
+                        const res = await fetch('/api/admin/ai/test', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                apiKey: aiKeyInput.value.trim() || undefined,
+                                model: aiConfig.value.model
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            alert('連線成功！Gemini AI 運作正常。\n回應內容：' + data.reply);
+                        } else {
+                            alert('連線失敗：' + data.message);
+                        }
+                    } catch (e) {
+                        alert('連線失敗：' + e.message);
+                    } finally {
+                        isTestingAi.value = false;
+                    }
+                };
+
+                const clearAiCacheConfirm = async () => {
+                    if (!confirm('確定要清空現有的 AI 分析快取嗎？清空後下次產出報表時將重新呼叫 Gemini AI 進行思考推理。')) return;
+                    try {
+                        const res = await fetch('/api/admin/ai/clear-cache', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            alert('AI 研判快取已清空！');
+                            fetchAiConfig();
+                        }
+                    } catch (e) {
+                        alert('清空失敗：' + e.message);
+                    }
+                };
+
                 const reportFilters = ref({
                     cveOnly: false,
                     highSeverityOnly: false,
@@ -3055,6 +3199,14 @@ all-staff@company.com"
                     reportPeriod,
                     reportColumns,
                     reportFilters,
+                    aiConfig,
+                    aiKeyInput,
+                    showAiKey,
+                    isSavingAi,
+                    isTestingAi,
+                    saveAiConfig,
+                    testAiConnection,
+                    clearAiCacheConfirm,
                     reportDate,
                     reportMaxRows,
                     reportRows,

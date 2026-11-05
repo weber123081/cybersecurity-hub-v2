@@ -7,7 +7,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { fetchAndSave, getSources, saveSources, testSourceUrl, generateStableId, requestAbortFetch } from './fetcher.js';
 import { sendWeeklyEmail, generateWeeklyReportEmail } from './mailer.js';
-import { buildReportRows } from './threat-analyzer.js';
+import { buildReportRows, buildThreatReportRowsAsync } from './threat-analyzer.js';
+import { testGeminiApiKey, getAiCacheStats, clearAiCache } from './gemini-analyzer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -656,7 +657,7 @@ app.post('/api/admin/email-config/send-now', requireAuth, async (req, res) => {
 // ==========================================
 // Admin Threat Report Center APIs (週報 / 月報彙整中心)
 // ==========================================
-app.get('/api/admin/reports/generate', requireAuth, (req, res) => {
+app.get('/api/admin/reports/generate', requireAuth, async (req, res) => {
     try {
         const period = req.query.period || 'week'; // 'week' | 'month'
         const maxCount = parseInt(req.query.maxCount) || 10;
@@ -664,28 +665,89 @@ app.get('/api/admin/reports/generate', requireAuth, (req, res) => {
         const highSeverityOnly = req.query.highSeverityOnly === 'true';
         const deduplicate = req.query.deduplicate !== 'false';
         const excludeDigest = req.query.excludeDigest !== 'false';
+        const useAi = req.query.useAi !== 'false';
+
+        const cfg = getSiteConfig();
+        const apiKey = cfg.ai?.apiKey || process.env.GEMINI_API_KEY || '';
+        const aiEnabled = (cfg.ai?.enabled !== false) && !!apiKey;
+        const model = cfg.ai?.model || 'gemini-1.5-flash';
+
         let posts = [];
         if (fs.existsSync(NEWS_PATH)) {
             posts = JSON.parse(fs.readFileSync(NEWS_PATH, 'utf8'));
         }
-        const rows = buildReportRows(posts, {
+
+        const rows = await buildThreatReportRowsAsync(posts, {
             period,
             maxCount,
             cveOnly,
             highSeverityOnly,
             deduplicate,
-            excludeDigest
+            excludeDigest,
+            useAi: useAi && aiEnabled,
+            apiKey,
+            model
         });
+
         res.json({
             success: true,
             period,
             reportDate: new Date().toISOString().slice(0, 10),
+            aiUsed: aiEnabled && useAi,
             rows
         });
     } catch (e) {
         console.error('[API] Failed to generate report:', e);
         res.status(500).json({ success: false, message: '產出報表資料失敗: ' + e.message });
     }
+});
+
+// Gemini AI Config & Cache APIs
+app.get('/api/admin/ai/config', requireAuth, (req, res) => {
+    const cfg = getSiteConfig();
+    const apiKey = cfg.ai?.apiKey || process.env.GEMINI_API_KEY || '';
+    const stats = getAiCacheStats();
+    res.json({
+        success: true,
+        enabled: cfg.ai?.enabled ?? true,
+        hasApiKey: !!apiKey,
+        maskedKey: apiKey ? (apiKey.slice(0, 6) + '...' + apiKey.slice(-4)) : '',
+        model: cfg.ai?.model || 'gemini-1.5-flash',
+        cacheStats: stats
+    });
+});
+
+app.post('/api/admin/ai/config', requireAuth, (req, res) => {
+    const { enabled, apiKey, model } = req.body;
+    const cfg = getSiteConfig();
+    if (!cfg.ai) cfg.ai = {};
+    if (typeof enabled === 'boolean') cfg.ai.enabled = enabled;
+    if (typeof apiKey === 'string') {
+        cfg.ai.apiKey = apiKey.trim();
+    }
+    if (model) cfg.ai.model = model;
+    saveSiteConfig(cfg);
+    res.json({ success: true, message: 'Gemini AI 設定已儲存' });
+});
+
+app.post('/api/admin/ai/test', requireAuth, async (req, res) => {
+    try {
+        const cfg = getSiteConfig();
+        const apiKey = req.body.apiKey || cfg.ai?.apiKey || process.env.GEMINI_API_KEY;
+        const model = req.body.model || cfg.ai?.model || 'gemini-1.5-flash';
+        if (!apiKey) {
+            return res.status(400).json({ success: false, message: '尚未填寫 Gemini API Key' });
+        }
+        const reply = await testGeminiApiKey(apiKey, model);
+        res.json({ success: true, message: '連線驗證成功！', reply });
+    } catch (e) {
+        res.status(400).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/admin/ai/clear-cache', requireAuth, (req, res) => {
+    clearAiCache();
+    res.json({ success: true, message: 'AI 研判快取已成功清空！' });
 });
 
 app.get('/api/admin/reports/draft', requireAuth, (req, res) => {

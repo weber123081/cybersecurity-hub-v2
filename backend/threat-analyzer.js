@@ -1,3 +1,4 @@
+import { getAiCache, analyzePostWithGemini } from './gemini-analyzer.js';
 // backend/threat-analyzer.js
 // 專業資安情資分析與週報/月報智慧生成引擎
 // 支援 6 大標準欄位：搜集日期、搜集來源、威脅情資說明、可能之影響、因應方案、備註
@@ -420,4 +421,51 @@ export function buildReportRows(posts, options = {}) {
     }
 
     return rows;
+}
+
+
+/**
+ * 結合 Gemini AI 深度思考之非同步週報/月報分析引擎
+ * 若未設定 API Key 或 AI 呼叫異常，自動平滑降級為規則引擎
+ */
+export async function buildThreatReportRowsAsync(posts, options = {}) {
+    const baseRows = buildReportRows(posts, options);
+    const { apiKey, model = 'gemini-1.5-flash', useAi = true } = options;
+
+    if (!useAi || !apiKey) {
+        return baseRows;
+    }
+
+    const cache = getAiCache();
+    for (let i = 0; i < baseRows.length; i++) {
+        const row = baseRows[i];
+        const cacheKey = String(row.id || row.description);
+
+        if (cache[cacheKey] && cache[cacheKey].impact && cache[cacheKey].solution) {
+            row.impact = cache[cacheKey].impact;
+            row.solution = cache[cacheKey].solution;
+            if (cache[cacheKey].description) {
+                row.description = cache[cacheKey].description;
+            }
+            row.isAiGenerated = true;
+            continue;
+        }
+
+        try {
+            const originalPost = posts.find(p => p.id === row.id) || { title: row.description, content: row.description };
+            const aiResult = await analyzePostWithGemini(originalPost, apiKey, model);
+            if (aiResult) {
+                row.impact = aiResult.impact;
+                row.solution = aiResult.solution;
+                if (aiResult.description) {
+                    row.description = aiResult.description;
+                }
+                row.isAiGenerated = true;
+            }
+        } catch (e) {
+            console.warn(`[ThreatAnalyzer] AI error for item ${row.id}, falling back to rule-based:`, e.message);
+        }
+    }
+
+    return baseRows;
 }
