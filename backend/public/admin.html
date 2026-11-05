@@ -2087,6 +2087,47 @@ all-staff@company.com"
                     }
                 };
 
+                const reAnalyzingIndex = ref(-1);
+                const reportAiStats = ref({ total: 0, aiGeneratedCount: 0, ruleBasedCount: 0 });
+
+                const updateAiStats = () => {
+                    const total = reportRows.value.length;
+                    const aiGeneratedCount = reportRows.value.filter(r => r.isAiGenerated).length;
+                    reportAiStats.value = {
+                        total,
+                        aiGeneratedCount,
+                        ruleBasedCount: total - aiGeneratedCount
+                    };
+                };
+
+                const reAnalyzeRowWithAi = async (row, index) => {
+                    reAnalyzingIndex.value = index;
+                    try {
+                        const res = await fetch('/api/admin/ai/re-analyze', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: row.id, title: row.description })
+                        });
+                        const data = await res.json();
+                        if (data.success && data.row) {
+                            reportRows.value[index].impact = data.row.impact;
+                            reportRows.value[index].solution = data.row.solution;
+                            reportRows.value[index].isAiGenerated = true;
+                            reportRows.value[index].aiModel = data.row.aiModel;
+                            reportRows.value[index].analyzedAt = data.row.analyzedAt;
+                            fetchAiConfig();
+                            updateAiStats();
+                            alert('AI 重新研判完成！\n\n【可能影響】：' + data.row.impact.slice(0, 60) + '...\n\n【因應方案】：' + data.row.solution.slice(0, 60) + '...');
+                        } else {
+                            alert('AI 研判失敗：' + (data.message || '未知錯誤'));
+                        }
+                    } catch (e) {
+                        alert('AI 研判連線失敗：' + e.message);
+                    } finally {
+                        reAnalyzingIndex.value = -1;
+                    }
+                };
+
                 const reportFilters = ref({
                     cveOnly: false,
                     highSeverityOnly: false,
