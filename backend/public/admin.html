@@ -41,7 +41,7 @@
 
 <body>
     <div id="app" class="min-h-screen p-6">
-        <div class="max-w-4xl mx-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Header -->
             <header class="mb-8 flex justify-between items-center">
                 <div>
@@ -76,6 +76,19 @@
                 </div>
             </header>
 
+            <!-- Navigation Tab Bar (Full Width & Page Switching) -->
+            <nav class="mb-6 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
+                <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+                    :class="['px-4 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-sm', currentTab === tab.id ? 'bg-indigo-600 text-white ring-2 ring-indigo-400 ring-offset-1' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200']">
+                    <i :class="['fa-solid', tab.icon]"></i>
+                    <span>{{ tab.name }}</span>
+                    <span v-if="tab.badge !== undefined" :class="['text-xs px-2 py-0.5 rounded-full font-bold', currentTab === tab.id ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700']">
+                        {{ tab.badge }}
+                    </span>
+                </button>
+            </nav>
+
+            <div v-show="currentTab === 'overview'" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <!-- Status Card -->
                 <div class="glass-panel rounded-2xl p-6 relative overflow-hidden">
@@ -168,6 +181,9 @@
                 </div>
             </div>
 
+            </div>
+
+            <div v-show="currentTab === 'site'" class="space-y-6">
             <!-- Site Announcement Banner Card -->
             <div class="glass-panel rounded-2xl p-6 mt-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
@@ -358,6 +374,9 @@
                 </div>
             </div>
 
+            </div>
+
+            <div v-show="currentTab === 'posts'" class="space-y-6">
             <!-- Internal Announcement & Post Management Card (Item 2) -->
             <div class="glass-panel rounded-2xl p-6 mt-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
@@ -479,6 +498,9 @@
                 </div>
             </div>
 
+            </div>
+
+            <div v-show="currentTab === 'dictionary'" class="space-y-6">
             <!-- Dictionary & Daily Security Tips Management Card -->
             <div class="glass-panel rounded-2xl p-6 mt-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
@@ -614,6 +636,9 @@
                 </div>
             </div>
 
+            </div>
+
+            <div v-show="currentTab === 'sources'" class="space-y-6">
             <!-- RSS Sources Management Card -->
             <div class="glass-panel rounded-2xl p-6 mt-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
@@ -769,6 +794,9 @@
                 </div>
             </div>
 
+            </div>
+
+            <div v-show="currentTab === 'employees'" class="space-y-6">
             <!-- Employee / Department IP Mapping Card (Item 3) -->
             <div class="glass-panel rounded-2xl p-6 mt-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
@@ -886,6 +914,9 @@
                 </div>
             </div>
 
+            </div>
+
+            <div v-show="currentTab === 'visitors'" class="space-y-6">
             <!-- Visitor Logs Card -->
             <div class="glass-panel rounded-2xl p-6 mt-6">
                 <div
@@ -972,6 +1003,7 @@
             </div>
 
         </div>
+            </div>
     </div>
 
     <script>
@@ -979,6 +1011,12 @@
 
         createApp({
             setup() {
+                const currentTab = ref(localStorage.getItem('cyberhub_admin_tab') || 'overview');
+
+                const switchTab = (tabId) => {
+                    currentTab.value = tabId;
+                    localStorage.setItem('cyberhub_admin_tab', tabId);
+                };
                 const status = ref({
                     isFetching: false,
                     lastFetchTime: null,
@@ -1122,7 +1160,7 @@
                 const dictionary = ref([]);
                 const dictSearchQuery = ref('');
                 const dictMessage = ref({ text: '', type: 'success' });
-                const showDictList = ref(false);
+                const showDictList = ref(true);
                 const newDict = ref({ term: '', definition: '', tipsText: '' });
                 const editingDictId = ref(null);
                 const editDictForm = ref({ term: '', definition: '', tipsText: '' });
@@ -1225,7 +1263,7 @@
 
                 // Custom Announcements & Post Management (Item 2)
                 const posts = ref([]);
-                const showPostList = ref(false);
+                const showPostList = ref(true);
                 const postSearchQuery = ref('');
                 const postMessage = ref({ text: '', type: 'success' });
                 const newPost = ref({
@@ -1720,6 +1758,16 @@
                     }
                 };
 
+                const tabs = computed(() => [
+                    { id: 'overview', name: '系統概況與排程', icon: 'fa-gauge-high' },
+                    { id: 'site', name: '宣導橫幅與通報窗口', icon: 'fa-bullhorn' },
+                    { id: 'posts', name: '內部公告與文章管理', icon: 'fa-newspaper', badge: posts.value.length },
+                    { id: 'dictionary', name: '防護辭典與小提醒', icon: 'fa-book-open', badge: dictionary.value.length },
+                    { id: 'sources', name: '爬蟲來源管理', icon: 'fa-rss', badge: sources.value.length },
+                    { id: 'employees', name: '員工 IP 實名對照', icon: 'fa-address-card', badge: employees.value.length },
+                    { id: 'visitors', name: '訪客紀錄回溯', icon: 'fa-users', badge: pagination.value.totalCount }
+                ]);
+
                 onMounted(() => {
                     fetchStatus();
                     fetchPosts();
@@ -1736,6 +1784,9 @@
                 });
 
                 return {
+                    currentTab,
+                    switchTab,
+                    tabs,
                     status,
                     // Schedule Interval (Item 4)
                     scheduleInterval,
