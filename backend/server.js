@@ -738,8 +738,21 @@ app.post('/api/admin/ai/test', requireAuth, async (req, res) => {
         if (!apiKey) {
             return res.status(400).json({ success: false, message: '尚未填寫 Gemini API Key' });
         }
-        const reply = await testGeminiApiKey(apiKey, model);
-        res.json({ success: true, message: '連線驗證成功！', reply });
+        const result = await testGeminiApiKey(apiKey, model);
+        
+        if (result.activeModel) {
+            if (!cfg.ai) cfg.ai = {};
+            cfg.ai.model = result.activeModel;
+            saveSiteConfig(cfg);
+        }
+
+        res.json({ 
+            success: true, 
+            message: '連線驗證成功！', 
+            reply: result.reply,
+            activeModel: result.activeModel,
+            availableModels: result.availableModels
+        });
     } catch (e) {
         res.status(400).json({ success: false, message: e.message });
     }

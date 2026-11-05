@@ -254,8 +254,11 @@
                                 </button>
                             </div>
                             <select v-model="aiConfig.model" class="px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (推薦·每日1500次免費)</option>
-                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (深度推理·每日50次免費)</option>
+                                <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (自動最新 · 推薦)</option>
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (標準)</option>
+                                <option value="gemini-1.5-flash-002">Gemini 1.5 Flash 002</option>
+                                <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (自動最新 · 深度推理)</option>
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (標準)</option>
                             </select>
                             <button @click="saveAiConfig" :disabled="isSavingAi"
                                 class="px-3 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer">
@@ -2036,7 +2039,11 @@ all-staff@company.com"
                         });
                         const data = await res.json();
                         if (data.success) {
-                            alert('連線成功！Gemini AI 運作正常。\n回應內容：' + data.reply);
+                            if (data.activeModel) {
+                                aiConfig.value.model = data.activeModel;
+                            }
+                            fetchAiConfig();
+                            alert(`連線成功！Gemini AI 運作正常。\n自動適配模型：${data.activeModel || aiConfig.value.model}\nAI 回應：${data.reply}`);
                         } else {
                             alert('連線失敗：' + data.message);
                         }

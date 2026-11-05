@@ -1,6 +1,6 @@
 // backend/gemini-analyzer.js
 // Google Gemini AI 智慧資安深度分析模組
-// 支援快取、平滑降級、結構化 JSON 輸出
+// 具備模型自動適配、版本自動探測 (v1beta/v1)、快取、平滑降級
 
 import fs from 'fs';
 import path from 'path';
@@ -54,45 +54,121 @@ export function getAiCacheStats() {
 }
 
 /**
- * 測試 Gemini API Key 連線是否正常
+ * 查詢此 API Key 支援哪些模型 (ModelService.ListModels)
  */
-export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
-    if (!apiKey) throw new Error('請提供 API Key');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [
-                {
-                    parts: [
-                        { text: '請回覆「連線成功！Gemini AI 資安模組運作正常。」這句話即可。' }
-                    ]
-                }
-            ],
-            generationConfig: {
-                temperature: 0.1,
-                maxOutputTokens: 50
+export async function fetchAvailableModels(apiKey) {
+    if (!apiKey) return [];
+    for (const ver of ['v1beta', 'v1']) {
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${apiKey}`);
+            if (res.ok) {
+                const data = await res.json();
+                const list = (data.models || [])
+                    .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+                    .map(m => m.name.replace(/^models\//, ''));
+                if (list.length > 0) return list;
             }
-        })
-    });
-
-    if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        const errMsg = errJson.error?.message || `HTTP ${response.status} ${response.statusText}`;
-        throw new Error(`API 驗證失敗: ${errMsg}`);
+        } catch (e) {
+            console.warn(`[Gemini AI] ListModels ${ver} warning:`, e.message);
+        }
     }
-
-    const data = await response.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '連線成功';
-    return reply;
+    return [];
 }
 
 /**
- * 使用 Gemini AI 深度分析單則資安情資
+ * 測試 Gemini API Key 連線並自動適配最佳模型
  */
-export async function analyzePostWithGemini(post, apiKey, model = 'gemini-1.5-flash') {
+export async function testGeminiApiKey(apiKey, requestedModel = 'gemini-1.5-flash') {
+    if (!apiKey) throw new Error('請提供 API Key');
+
+    // 1. 優先向 Google 查詢該 Key 真正開通了哪些模型
+    const availableModels = await fetchAvailableModels(apiKey);
+
+    // 常見支援模型列表（依優先級排序）
+    const fallbackList = [
+        requestedModel,
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash',
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-pro',
+        'gemini-pro'
+    ];
+
+    let candidateModels = [];
+    if (availableModels.length > 0) {
+        if (availableModels.includes(requestedModel)) {
+            candidateModels = [requestedModel, ...availableModels.filter(m => m !== requestedModel)];
+        } else {
+            const preferred = availableModels.find(m => m.includes('1.5-flash'))
+                || availableModels.find(m => m.includes('flash'))
+                || availableModels.find(m => m.includes('pro'))
+                || availableModels[0];
+            candidateModels = [preferred, ...availableModels.filter(m => m !== preferred)];
+        }
+    } else {
+        candidateModels = fallbackList;
+    }
+
+    let lastError = null;
+    let successfulModel = null;
+    let replyText = null;
+
+    // 依序嘗試候選模型與 API 版本 (v1beta / v1)
+    for (const model of candidateModels.slice(0, 6)) {
+        for (const ver of ['v1beta', 'v1']) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [
+                            { parts: [{ text: '請回覆「連線成功！Gemini AI 資安模組運作正常。」這句話即可。' }] }
+                        ],
+                        generationConfig: {
+                            temperature: 0.1,
+                            maxOutputTokens: 50
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    replyText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '連線成功';
+                    successfulModel = model;
+                    break;
+                } else {
+                    const errJson = await response.json().catch(() => ({}));
+                    lastError = errJson.error?.message || `HTTP ${response.status} ${response.statusText}`;
+                }
+            } catch (e) {
+                lastError = e.message;
+            }
+        }
+        if (replyText) break;
+    }
+
+    if (!replyText) {
+        const hint = availableModels.length > 0
+            ? `（偵測到可用模型為：${availableModels.slice(0, 5).join('、')}）`
+            : '（請確認該專案已開通 Generative Language API，或重新於 aistudio.google.com 建立 API Key）';
+        throw new Error(`API 驗證失敗: ${lastError} ${hint}`);
+    }
+
+    return {
+        reply: replyText,
+        activeModel: successfulModel,
+        availableModels
+    };
+}
+
+/**
+ * 使用 Gemini AI 深度分析單則資安情資（支援自動重試可用模型）
+ */
+export async function analyzePostWithGemini(post, apiKey, requestedModel = 'gemini-1.5-flash') {
     if (!post || !apiKey) return null;
 
     const cacheKey = String(post.id || post.title);
@@ -104,7 +180,7 @@ export async function analyzePostWithGemini(post, apiKey, model = 'gemini-1.5-fl
     }
 
     const title = post.title || '';
-    const content = (post.content || '').slice(0, 2000); // 截取前 2000 字已足夠全面分析
+    const content = (post.content || '').slice(0, 2000);
 
     const prompt = `
 你是一位具備 15 年經驗的企業資安主管與威脅情資架構師。請根據以下這則最新資安情資，進行縝密的專業深度思考與研判，產出具有高度參考價值的分析結論。
@@ -129,55 +205,77 @@ JSON 格式規範：
 }
 `;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    // 候選模型清單
+    const candidateModels = [
+        requestedModel,
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash',
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-pro',
+        'gemini-pro'
+    ];
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [
-                {
-                    parts: [{ text: prompt }]
+    let lastError = null;
+
+    for (const model of candidateModels) {
+        for (const ver of ['v1beta', 'v1']) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            temperature: 0.2,
+                            maxOutputTokens: 600,
+                            responseMimeType: 'application/json'
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    const errJson = await response.json().catch(() => ({}));
+                    lastError = errJson.error?.message || `HTTP ${response.status}`;
+                    if (response.status === 404 || (lastError && lastError.includes('not found'))) {
+                        continue; // 嘗試下一個模型
+                    }
+                    throw new Error(lastError);
                 }
-            ],
-            generationConfig: {
-                temperature: 0.2, // 保持冷靜與準確性
-                maxOutputTokens: 600,
-                responseMimeType: 'application/json'
+
+                const data = await response.json();
+                const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+                const result = JSON.parse(cleanJson);
+
+                if (result && result.impact && result.solution) {
+                    cache[cacheKey] = {
+                        description: result.description || title,
+                        impact: result.impact,
+                        solution: result.solution,
+                        model: model,
+                        analyzedAt: new Date().toISOString()
+                    };
+                    saveAiCache(cache);
+                    return cache[cacheKey];
+                }
+            } catch (e) {
+                lastError = e.message;
             }
-        })
-    });
-
-    if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `HTTP ${response.status}`);
+        }
     }
 
-    const data = await response.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-    
-    // 解析 JSON
-    const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    const result = JSON.parse(cleanJson);
-
-    if (result && result.impact && result.solution) {
-        // 存入快取
-        cache[cacheKey] = {
-            description: result.description || title,
-            impact: result.impact,
-            solution: result.solution,
-            model: model,
-            analyzedAt: new Date().toISOString()
-        };
-        saveAiCache(cache);
-        return cache[cacheKey];
+    if (lastError) {
+        throw new Error(lastError);
     }
-
     return null;
 }
 
 /**
- * 批次處理並進行延遲控制，避免觸發每分鐘速率限制 (15 RPM)
+ * 批次處理並進行延遲控制
  */
 export async function batchAnalyzePostsWithGemini(posts, apiKey, model = 'gemini-1.5-flash', onProgress = null) {
     if (!apiKey || !Array.isArray(posts) || posts.length === 0) return [];
@@ -200,13 +298,12 @@ export async function batchAnalyzePostsWithGemini(posts, apiKey, model = 'gemini
             results.push(analyzed);
             if (onProgress) onProgress(i + 1, posts.length, false);
 
-            // 如果不是快取命中，稍微延遲 600ms 以保護 API 速率限制
             if (i < posts.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 600));
             }
         } catch (e) {
             console.error(`[Gemini AI] Analysis error on post ${post.id}:`, e.message);
-            results.push(null); // 失敗則放 null，後續平滑降級為規則引擎
+            results.push(null);
         }
     }
 
