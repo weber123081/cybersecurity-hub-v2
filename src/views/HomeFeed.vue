@@ -17,13 +17,11 @@ const showAnnouncement = ref(true);
 const filterCriticalOnly = ref(false);
 const filterCveOnly = ref(false);
 
-// Dual Perspective: 'life' (大眾生活模式) | 'pro' (IT 專業模式)
-const viewPerspective = ref(localStorage.getItem('cyberhub_view_perspective') || 'life');
-
-function setViewPerspective(mode) {
-  viewPerspective.value = mode;
-  localStorage.setItem('cyberhub_view_perspective', mode);
-}
+// 大眾端預設 100% 生活自保模式（不向一般使用者展示 IT 模式切換按鈕）
+// 僅當 IT 管理員/技術人員由後台或特殊網址帶入 ?mode=it 時，才展示技術細節
+const viewPerspective = computed(() => {
+  return route.query.mode === 'it' ? 'pro' : 'life';
+});
 
 const siteAnnouncement = ref({
   enabled: true,
@@ -331,41 +329,15 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Perspective Switcher Card (Dual Perspective: 大眾生活模式 vs IT 專業模式) -->
-      <div class="perspective-switcher-card" v-if="!loading && !fetchError">
-        <div class="perspective-tabs">
-          <button 
-            class="perspective-tab-btn" 
-            :class="{ active: viewPerspective === 'life' }"
-            @click="setViewPerspective('life')"
-          >
-            <span class="perspective-emoji">🌿</span>
-            <div class="perspective-tab-info">
-              <span class="perspective-tab-title">大眾生活模式</span>
-              <span class="perspective-tab-desc">白話生活防護 · 無痛自保 3 招</span>
-            </div>
-            <span class="perspective-tab-pill" v-if="viewPerspective === 'life'">推薦大眾</span>
-          </button>
-
-          <button 
-            class="perspective-tab-btn" 
-            :class="{ active: viewPerspective === 'pro' }"
-            @click="setViewPerspective('pro')"
-          >
-            <span class="perspective-emoji">⚙️</span>
-            <div class="perspective-tab-info">
-              <span class="perspective-tab-title">IT 專業模式</span>
-              <span class="perspective-tab-desc">CVE 漏洞 · 技術研判細節</span>
-            </div>
-            <span class="perspective-tab-pill pro-pill" v-if="viewPerspective === 'pro'">網管/技術</span>
-          </button>
+      <!-- IT Mode Notice (只在 IT 人員由後台帶入 ?mode=it 時顯示，一般使用者不會看到) -->
+      <div class="it-mode-notice-bar" v-if="viewPerspective === 'pro'">
+        <div class="it-mode-notice-info">
+          <i class="fa-solid fa-laptop-code"></i>
+          <span><strong>IT 專業模式 (內部技術檢視)</strong>：正在顯示 CVE 漏洞代碼與技術研判。一般使用者瀏覽時不會看到此模式。</span>
         </div>
-
-        <!-- Gentle notice for Life Mode -->
-        <div class="perspective-life-hint" v-if="viewPerspective === 'life'">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>目前已切換為<strong>「大眾生活模式」</strong>：所有艱深漏洞技術已轉化為日常場景（網購、網銀、手機、家電）與自保步驟；若需查看完整 CVE 與技術分析，可點擊上方切換至 IT 專業模式。</span>
-        </div>
+        <button class="it-exit-btn" @click="router.push({ query: { ...route.query, mode: undefined } })">
+          <i class="fa-solid fa-arrow-left"></i> 返回大眾生活版
+        </button>
       </div>
 
       <!-- Quick Horizontal Category Chips Bar -->
@@ -422,6 +394,7 @@ onUnmounted(() => {
               <span class="ctrl-count-badge">{{ criticalCount }}</span>
             </button>
             <button 
+              v-if="viewPerspective === 'pro'"
               class="ctrl-btn filter-btn-cve" 
               :class="{ active: filterCveOnly }" 
               @click="filterCveOnly = !filterCveOnly"
@@ -1206,5 +1179,50 @@ onUnmounted(() => {
     font-size: 0.9rem;
     color: #10b981;
     flex-shrink: 0;
+}
+
+/* IT Mode Notice Bar (For internal tech staff only) */
+.it-mode-notice-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    color: #f8fafc;
+    border-radius: 10px;
+    padding: 0.65rem 1rem;
+    margin-bottom: 0.85rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.it-mode-notice-info {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.86rem;
+}
+
+.it-mode-notice-info i {
+    color: #38bdf8;
+    font-size: 1.1rem;
+}
+
+.it-exit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #f8fafc;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.it-exit-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
 }
 </style>
