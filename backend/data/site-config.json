@@ -7,15 +7,9 @@
   "hotlines": [
     {
       "id": "hotline-1",
-      "name": "內網資安專線",
-      "val": "分機 #1199",
-      "icon": "fa-shield-virus"
-    },
-    {
-      "id": "hotline-2",
-      "name": "警政署反詐專線",
-      "val": "直撥 165",
-      "icon": "fa-user-shield"
+      "name": "林宇祥",
+      "val": "分機 #1638",
+      "icon": "fa-phone-volume"
     }
   ],
   "schedule": {
@@ -26,15 +20,15 @@
     "scheduleDay": 1,
     "scheduleHour": 9,
     "scheduleMinute": 0,
-    "smtpHost": "",
+    "smtpHost": "hota-mail.hota.com.tw",
     "smtpPort": 587,
     "smtpSecure": false,
-    "smtpUser": "",
-    "smtpPass": "",
+    "smtpUser": "it-05",
+    "smtpPass": "Ht@01288",
     "senderName": "生活資安觀測站 · 資安小組",
-    "senderEmail": "",
-    "recipients": "",
-    "attachCsv": true,
+    "senderEmail": "it-05@hota.com.tw",
+    "recipients": "squall-lin@hota.com.tw",
+    "attachCsv": false,
     "lastSentTime": null,
     "lastSentStatus": null
   }

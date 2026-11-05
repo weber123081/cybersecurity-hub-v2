@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PostCard from '../components/PostCard.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
-import ReportModal from '../components/ReportModal.vue'
 
 const route = useRoute();
 const router = useRouter();
@@ -15,7 +14,6 @@ const searchQuery = ref(route.query.q || '');
 const sortBy = ref('latest'); // 'latest' | 'views'
 const feedMode = ref(localStorage.getItem('cyberhub_feed_mode') || 'compact'); // 'compact' | 'detailed'
 const showAnnouncement = ref(true);
-const showReportModal = ref(route.query.report === '1');
 const filterCriticalOnly = ref(false);
 const filterCveOnly = ref(false);
 
@@ -47,16 +45,6 @@ async function fetchSiteConfig() {
   }
 }
 
-const handleOpenReportEvent = () => {
-  showReportModal.value = true;
-};
-
-watch(() => route.query.report, (val) => {
-  if (val === '1') {
-    showReportModal.value = true;
-    router.replace({ query: { ...route.query, report: undefined } });
-  }
-});
 
 function isPostCritical(post) {
   const t = (post.title || '').toLowerCase();
@@ -267,12 +255,8 @@ onMounted(() => {
     fetchStats();
     fetchDictionary();
     fetchSiteConfig();
-    window.addEventListener('open-report-modal', handleOpenReportEvent);
+        
     
-    if (route.query.report === '1') {
-        showReportModal.value = true;
-    }
-
     setTimeout(() => {
         if (loading.value) {
             loading.value = false;
@@ -284,8 +268,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    window.removeEventListener('open-report-modal', handleOpenReportEvent);
-    if (statsInterval) clearInterval(statsInterval);
+        if (statsInterval) clearInterval(statsInterval);
     if (tipInterval) clearInterval(tipInterval);
 });
 </script>
@@ -294,17 +277,7 @@ onUnmounted(() => {
   <main class="main-container">
     <!-- Left Sidebar -->
     <aside class="sidebar left-sidebar">
-      <!-- Prominent Monthly Report Card -->
-      <div class="widget report-cta-widget">
-        <div class="report-cta-header">
-          <i class="fa-solid fa-file-shield"></i>
-          <span>高危威脅情資月報</span>
-        </div>
-        <p class="report-cta-desc">自動抓取最嚴重 CVSS / 0-day 漏洞並排除重複情資，一鍵匯出標準 6 欄月報</p>
-        <button class="sidebar-report-btn" @click="showReportModal = true">
-          <i class="fa-solid fa-table-list"></i> 匯出高危月報
-        </button>
-      </div>
+      
 
       <div class="widget categories-widget">
         <h3><i class="fa-solid fa-layer-group"></i> 分類主題</h3>
@@ -459,18 +432,7 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <div class="controls-divider"></div>
-
-          <!-- Export Report Button (Agent 3) -->
-          <div class="controls-group report-ctrl-group">
-            <button 
-              class="ctrl-btn export-report-btn" 
-              @click="showReportModal = true"
-              title="匯出高危資安威脅情資月報 (支援 Word / Excel CSV / PDF)"
-            >
-              <i class="fa-solid fa-file-shield"></i> 匯出月報
-            </button>
-          </div>
+          
         </div>
       </div>
 
@@ -579,67 +541,11 @@ onUnmounted(() => {
       </div>
     </aside>
 
-    <!-- Monthly Report Export Modal -->
-    <ReportModal 
-      :isOpen="showReportModal" 
-      :posts="posts" 
-      :bookmarks="bookmarkedIds"
-      @close="showReportModal = false" 
-    />
+    
   </main>
 </template>
 
 <style scoped>
-.report-cta-widget {
-    background: linear-gradient(145deg, rgba(239, 68, 68, 0.08), rgba(234, 88, 12, 0.06));
-    border: 1.5px solid rgba(239, 68, 68, 0.28) !important;
-}
-
-.report-cta-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 1rem;
-    font-weight: 800;
-    color: #dc2626;
-    margin-bottom: 0.45rem;
-}
-
-.dark-theme .report-cta-header {
-    color: #f87171;
-}
-
-.report-cta-desc {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    line-height: 1.45;
-    margin-bottom: 0.75rem;
-}
-
-.sidebar-report-btn {
-    width: 100%;
-    padding: 0.6rem 0.9rem;
-    border: none;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #ef4444, #ea580c);
-    color: #ffffff;
-    font-size: 0.9rem;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-    transition: all 0.2s ease;
-}
-
-.sidebar-report-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
-    filter: brightness(1.05);
-}
-
 .announcement-banner {
     display: flex;
     justify-content: space-between;
@@ -911,27 +817,6 @@ onUnmounted(() => {
 .cve-filter-tag {
     background-color: rgba(234, 88, 12, 0.12) !important;
     color: #ea580c !important;
-}
-
-.report-ctrl-group {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-}
-
-.export-report-btn {
-    background: linear-gradient(135deg, #ef4444, #ea580c) !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
-    padding: 0.38rem 0.85rem !important;
-    border-radius: 8px !important;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3) !important;
-}
-
-.export-report-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
-    filter: brightness(1.06);
 }
 
 .cat-name-icon {

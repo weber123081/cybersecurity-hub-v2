@@ -7,6 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { fetchAndSave, getSources, saveSources, testSourceUrl, generateStableId, requestAbortFetch } from './fetcher.js';
 import { sendWeeklyEmail, generateWeeklyReportEmail } from './mailer.js';
+import { buildReportRows } from './threat-analyzer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,7 @@ const EMPLOYEES_PATH = path.join(__dirname, 'data/employees.json');
 const NEWS_PATH = path.join(__dirname, '../public/data/news.json');
 const SITE_CONFIG_PATH = path.join(__dirname, 'data/site-config.json');
 const DICTIONARY_PATH = path.join(__dirname, '../public/data/dictionary.json');
+const REPORT_DRAFT_PATH = path.join(__dirname, 'data/report-draft.json');
 
 const DEFAULT_SITE_CONFIG = {
     announcement: {
@@ -647,6 +649,83 @@ app.post('/api/admin/email-config/send-now', requireAuth, async (req, res) => {
         emailCfg.lastSentStatus = `發送失敗: ${e.message}`;
         saveSiteConfig(cfg);
         res.status(400).json({ success: false, message: '發送失敗：' + friendlyMsg });
+    }
+});
+
+
+// ==========================================
+// Admin Threat Report Center APIs (週報 / 月報彙整中心)
+// ==========================================
+app.get('/api/admin/reports/generate', requireAuth, (req, res) => {
+    try {
+        const period = req.query.period || 'week'; // 'week' | 'month'
+        const maxCount = parseInt(req.query.maxCount) || 10;
+        const cveOnly = req.query.cveOnly === 'true';
+        let posts = [];
+        if (fs.existsSync(NEWS_PATH)) {
+            posts = JSON.parse(fs.readFileSync(NEWS_PATH, 'utf8'));
+        }
+        const rows = buildReportRows(posts, { period, maxCount, cveOnly });
+        res.json({
+            success: true,
+            period,
+            reportDate: new Date().toISOString().slice(0, 10),
+            rows
+        });
+    } catch (e) {
+        console.error('[API] Failed to generate report:', e);
+        res.status(500).json({ success: false, message: '產出報表資料失敗: ' + e.message });
+    }
+});
+
+app.get('/api/admin/reports/draft', requireAuth, (req, res) => {
+    if (fs.existsSync(REPORT_DRAFT_PATH)) {
+        try {
+            const draft = JSON.parse(fs.readFileSync(REPORT_DRAFT_PATH, 'utf8'));
+            return res.json({ success: true, draft });
+        } catch (e) {}
+    }
+    res.json({ success: true, draft: null });
+});
+
+app.post('/api/admin/reports/draft', requireAuth, (req, res) => {
+    try {
+        const draft = req.body || {};
+        fs.writeFileSync(REPORT_DRAFT_PATH, JSON.stringify(draft, null, 2), 'utf8');
+        res.json({ success: true, message: '報表草稿已成功保存！' });
+    } catch (e) {
+        res.status(500).json({ success: false, message: '儲存草稿失敗: ' + e.message });
+    }
+});
+
+app.post('/api/admin/reports/send-email', requireAuth, async (req, res) => {
+    const { period, reportDate, rows, recipients, subject, attachCsv } = req.body || {};
+    const cfg = getSiteConfig();
+    const emailCfg = cfg.emailWeeklyReport || {};
+    if (!emailCfg.smtpHost) {
+        return res.status(400).json({ success: false, message: '請先至「每週自動寄週報」分頁設定 SMTP 伺服器資訊' });
+    }
+    const targetRecipients = recipients || emailCfg.recipients;
+    if (!targetRecipients) {
+        return res.status(400).json({ success: false, message: '請填寫收件人 Email 信箱' });
+    }
+    try {
+        const isMonth = period === 'month';
+        const reportTitle = isMonth ? '高危資安威脅情資月報' : '資安威脅情資週報';
+        const finalSubject = subject || `【資安情報】生活資安觀測站 · ${reportTitle} (${reportDate || new Date().toISOString().slice(0, 10)})`;
+        
+        const result = await sendWeeklyEmail({
+            ...emailCfg,
+            recipients: targetRecipients,
+            period: period || 'week',
+            reportDate: reportDate,
+            customRows: rows,
+            attachCsv: attachCsv !== undefined ? attachCsv : true,
+            subject: finalSubject
+        });
+        res.json({ success: true, message: `已成功發送報表至 ${result.recipientCount} 位收件人！`, result });
+    } catch (e) {
+        res.status(400).json({ success: false, message: '寄送失敗：' + formatSmtpErrorMessage(e) });
     }
 });
 
