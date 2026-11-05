@@ -30,6 +30,68 @@ app.use(session({
 const STATS_PATH = path.join(__dirname, 'data/stats.json');
 const EMPLOYEES_PATH = path.join(__dirname, 'data/employees.json');
 const NEWS_PATH = path.join(__dirname, '../public/data/news.json');
+const SITE_CONFIG_PATH = path.join(__dirname, 'data/site-config.json');
+const DICTIONARY_PATH = path.join(__dirname, '../public/data/dictionary.json');
+
+const DEFAULT_SITE_CONFIG = {
+    announcement: {
+        enabled: true,
+        title: "資訊安全防護宣導：",
+        content: "近期針對內部企業之社交工程釣魚信件頻傳，請全體同仁切勿點擊不明郵件附件或短網址，發現異常請即刻通報資訊單位！"
+    },
+    hotlines: [
+        { id: "hotline-1", name: "內網資安專線", val: "分機 #1199", icon: "fa-shield-virus" },
+        { id: "hotline-2", name: "警政署反詐專線", val: "直撥 165", icon: "fa-user-shield" }
+    ],
+    schedule: {
+        intervalHours: 6
+    }
+};
+
+function getSiteConfig() {
+    try {
+        if (!fs.existsSync(SITE_CONFIG_PATH)) {
+            const dir = path.dirname(SITE_CONFIG_PATH);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(SITE_CONFIG_PATH, JSON.stringify(DEFAULT_SITE_CONFIG, null, 2), 'utf8');
+            return DEFAULT_SITE_CONFIG;
+        }
+        return JSON.parse(fs.readFileSync(SITE_CONFIG_PATH, 'utf8'));
+    } catch (e) {
+        console.error('getSiteConfig error:', e);
+        return DEFAULT_SITE_CONFIG;
+    }
+}
+
+function saveSiteConfig(cfg) {
+    try {
+        const dir = path.dirname(SITE_CONFIG_PATH);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(SITE_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+    } catch (e) {
+        console.error('saveSiteConfig error:', e);
+    }
+}
+
+function getDictionary() {
+    try {
+        if (!fs.existsSync(DICTIONARY_PATH)) return [];
+        return JSON.parse(fs.readFileSync(DICTIONARY_PATH, 'utf8'));
+    } catch (e) {
+        console.error('getDictionary error:', e);
+        return [];
+    }
+}
+
+function saveDictionary(dict) {
+    try {
+        const dir = path.dirname(DICTIONARY_PATH);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(DICTIONARY_PATH, JSON.stringify(dict, null, 2), 'utf8');
+    } catch (e) {
+        console.error('saveDictionary error:', e);
+    }
+}
 
 const DEFAULT_EMPLOYEES = [
     { id: 'emp-admin-lan', name: '資訊中心 (內網管理段)', ipPatterns: ['10.2.10.'] },
@@ -274,9 +336,23 @@ function requireAuth(req, res, next) {
 }
 
 // 3. Status/Fetch Logic
+function getCronExprForInterval(hours) {
+    const h = parseInt(hours) || 6;
+    if (h === 1) return '0 * * * *';
+    if (h === 24) return '0 2 * * *';
+    return `0 */${h} * * *`;
+}
+
 function startScheduler() {
-    if (scheduledTask) return;
-    scheduledTask = cron.schedule('0 0,6,12,18 * * *', async () => {
+    if (scheduledTask) {
+        scheduledTask.stop();
+        scheduledTask = null;
+    }
+    const cfg = getSiteConfig();
+    const intervalHours = (cfg.schedule && cfg.schedule.intervalHours) || 6;
+    const cronExpr = getCronExprForInterval(intervalHours);
+    console.log(`[CRON] Setting up scheduler with pattern: ${cronExpr} (every ${intervalHours} hours)`);
+    scheduledTask = cron.schedule(cronExpr, async () => {
         console.log(`[CRON] Triggering scheduled fetch...`);
         await performFetch();
     });
@@ -291,6 +367,16 @@ function stopScheduler() {
     }
     isSchedulerActive = false;
     console.log('[CRON] Scheduler stopped.');
+}
+
+function restartSchedulerWithInterval(hours) {
+    const cfg = getSiteConfig();
+    if (!cfg.schedule) cfg.schedule = {};
+    cfg.schedule.intervalHours = parseInt(hours) || 6;
+    saveSiteConfig(cfg);
+    if (isSchedulerActive) {
+        startScheduler();
+    }
 }
 
 async function performFetch() {
@@ -330,7 +416,9 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/status', requireAuth, (req, res) => {
     const postCount = getPosts().length;
-    res.json({ isFetching, lastFetchTime, isSchedulerActive, postCount });
+    const cfg = getSiteConfig();
+    const scheduleInterval = (cfg.schedule && cfg.schedule.intervalHours) || 6;
+    res.json({ isFetching, lastFetchTime, isSchedulerActive, postCount, scheduleInterval });
 });
 
 app.post('/api/fetch', requireAuth, (req, res) => {
@@ -342,6 +430,107 @@ app.post('/api/scheduler/toggle', requireAuth, (req, res) => {
     if (isSchedulerActive) stopScheduler();
     else startScheduler();
     res.json({ success: true, isSchedulerActive });
+});
+
+// Site Public Configuration (Announcement banner & Hotlines)
+app.get('/api/site/config', (req, res) => {
+    const cfg = getSiteConfig();
+    res.json({
+        success: true,
+        announcement: cfg.announcement,
+        hotlines: cfg.hotlines
+    });
+});
+
+// Admin Site Configuration API (Announcement, Hotlines, Schedule)
+app.get('/api/admin/site-config', requireAuth, (req, res) => {
+    res.json({ success: true, config: getSiteConfig() });
+});
+
+app.put('/api/admin/site-config', requireAuth, (req, res) => {
+    const current = getSiteConfig();
+    const { announcement, hotlines, schedule } = req.body || {};
+
+    if (announcement) {
+        current.announcement = {
+            enabled: Boolean(announcement.enabled),
+            title: String(announcement.title || '').trim(),
+            content: String(announcement.content || '').trim()
+        };
+    }
+    if (Array.isArray(hotlines)) {
+        current.hotlines = hotlines.map((h, i) => ({
+            id: h.id || `hotline-${i + 1}`,
+            name: String(h.name || '').trim(),
+            val: String(h.val || '').trim(),
+            icon: String(h.icon || 'fa-phone-volume').trim()
+        })).filter(h => h.name && h.val);
+    }
+    if (schedule && schedule.intervalHours) {
+        current.schedule = {
+            intervalHours: parseInt(schedule.intervalHours) || 6
+        };
+        restartSchedulerWithInterval(current.schedule.intervalHours);
+    }
+    saveSiteConfig(current);
+    res.json({ success: true, config: current });
+});
+
+// Dictionary & Daily Tips Management API
+app.get('/api/admin/dictionary', requireAuth, (req, res) => {
+    res.json({ success: true, dictionary: getDictionary() });
+});
+
+app.post('/api/admin/dictionary', requireAuth, (req, res) => {
+    const { term, definition, tips } = req.body || {};
+    if (!term || !term.trim() || !definition || !definition.trim()) {
+        return res.status(400).json({ success: false, message: '術語名稱與定義不能為空' });
+    }
+    const dict = getDictionary();
+    const newId = dict.length > 0 ? Math.max(...dict.map(d => Number(d.id) || 0)) + 1 : 1;
+    const parsedTips = Array.isArray(tips)
+        ? tips.map(t => String(t).trim()).filter(Boolean)
+        : String(tips || '').split('\n').map(t => t.trim()).filter(Boolean);
+
+    const newEntry = {
+        id: newId,
+        term: term.trim(),
+        definition: definition.trim(),
+        tips: parsedTips
+    };
+    dict.push(newEntry);
+    saveDictionary(dict);
+    res.json({ success: true, dictionary: dict, entry: newEntry });
+});
+
+app.put('/api/admin/dictionary/:id', requireAuth, (req, res) => {
+    const id = Number(req.params.id);
+    const { term, definition, tips } = req.body || {};
+    const dict = getDictionary();
+    const idx = dict.findIndex(d => Number(d.id) === id);
+    if (idx === -1) {
+        return res.status(404).json({ success: false, message: '找不到該辭典術語' });
+    }
+    if (term && term.trim()) dict[idx].term = term.trim();
+    if (definition && definition.trim()) dict[idx].definition = definition.trim();
+    if (tips !== undefined) {
+        dict[idx].tips = Array.isArray(tips)
+            ? tips.map(t => String(t).trim()).filter(Boolean)
+            : String(tips || '').split('\n').map(t => t.trim()).filter(Boolean);
+    }
+    saveDictionary(dict);
+    res.json({ success: true, dictionary: dict, entry: dict[idx] });
+});
+
+app.delete('/api/admin/dictionary/:id', requireAuth, (req, res) => {
+    const id = Number(req.params.id);
+    const dict = getDictionary();
+    const filtered = dict.filter(d => Number(d.id) !== id);
+    if (filtered.length === dict.length) {
+        return res.status(404).json({ success: false, message: '找不到該辭典術語' });
+    }
+    saveDictionary(filtered);
+    res.json({ success: true, dictionary: filtered });
 });
 
 // RSS Sources Management API

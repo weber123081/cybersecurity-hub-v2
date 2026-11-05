@@ -103,13 +103,13 @@
                         <i class="fa-solid fa-clock text-8xl text-indigo-600"></i>
                     </div>
                     <h2 class="text-lg font-semibold text-gray-700 mb-4"><i
-                            class="fa-solid fa-robot mr-2 text-indigo-500"></i>自動排程服務</h2>
+                            class="fa-solid fa-robot mr-2 text-indigo-500"></i>自動排程服務與頻率設定</h2>
 
                     <div class="space-y-4 relative z-10">
                         <div class="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100">
                             <div>
-                                <p class="font-medium text-gray-800">背景定時更新</p>
-                                <p class="text-xs text-gray-500 mt-1">每隔 6 小時自動擷取啟用中的網站情報</p>
+                                <p class="font-medium text-gray-800">背景定時更新開關</p>
+                                <p class="text-xs text-gray-500 mt-1">目前頻率：每隔 {{ scheduleInterval }} 小時自動擷取</p>
                             </div>
                             <button @click="toggleScheduler" :disabled="isLoading"
                                 :class="['relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2', status.isSchedulerActive ? 'bg-indigo-600' : 'bg-gray-200']">
@@ -117,8 +117,26 @@
                                     :class="['pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out', status.isSchedulerActive ? 'translate-x-5' : 'translate-x-0']"></span>
                             </button>
                         </div>
+
+                        <!-- Schedule Interval Selection -->
+                        <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-100 flex items-center justify-between">
+                            <div class="flex items-center">
+                                <i class="fa-solid fa-hourglass-half mr-2 text-indigo-600"></i>
+                                <span class="text-xs font-medium text-gray-700">自動抓取排程頻率</span>
+                            </div>
+                            <select v-model.number="scheduleInterval" @change="updateScheduleInterval"
+                                class="text-xs font-semibold px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm">
+                                <option :value="1">每 1 小時 (即時高頻)</option>
+                                <option :value="2">每 2 小時</option>
+                                <option :value="3">每 3 小時</option>
+                                <option :value="6">每 6 小時 (建議預設)</option>
+                                <option :value="12">每 12 小時 (半天)</option>
+                                <option :value="24">每 24 小時 (每日一次)</option>
+                            </select>
+                        </div>
+
                         <div class="text-xs text-gray-500 flex items-center">
-                            <i class="fa-solid fa-circle-info mr-1"></i> 您可以在伺服器保持開啟的情況下，隨時暫停背景排程。
+                            <i class="fa-solid fa-circle-info mr-1"></i> 修改頻率立即生效，背景服務將自動重新調整定時排程。
                         </div>
                     </div>
                 </div>
@@ -137,6 +155,196 @@
                 </button>
                 <div v-if="status.isFetching" class="mt-4 text-sm text-indigo-600 font-medium pulse">
                     爬蟲正在掃描啟用中的網站，請耐心等候...
+                </div>
+            </div>
+
+            <!-- Site Announcement Banner Card -->
+            <div class="glass-panel rounded-2xl p-6 mt-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">
+                            <i class="fa-solid fa-bullhorn mr-2 text-indigo-500"></i>前台首頁宣導橫幅設定 (首頁跑馬燈公告)
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">
+                            設定展示於前台首頁頂端的緊急資安宣導或注意事項橫幅，支援自由修改文字與開關。
+                        </p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-medium text-gray-600">前台顯示：</span>
+                        <button @click="siteAnnouncement.enabled = !siteAnnouncement.enabled"
+                            :class="['relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out', siteAnnouncement.enabled ? 'bg-indigo-600' : 'bg-gray-300']">
+                            <span :class="['pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out', siteAnnouncement.enabled ? 'translate-x-5' : 'translate-x-0']"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Feedback Banner -->
+                <div v-if="announcementMessage.text"
+                    :class="['mb-4 p-3 rounded-xl text-sm flex items-center justify-between border', announcementMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200']">
+                    <div class="flex items-center">
+                        <i :class="['fa-solid mr-2', announcementMessage.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check']"></i>
+                        <span>{{ announcementMessage.text }}</span>
+                    </div>
+                    <button @click="announcementMessage.text = ''" class="text-gray-400 hover:text-gray-600 ml-4">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">橫幅前綴標題</label>
+                        <input v-model="siteAnnouncement.title" type="text" placeholder="例：資訊安全防護宣導："
+                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">宣導詳細內文</label>
+                        <textarea v-model="siteAnnouncement.content" rows="3" placeholder="請輸入前台宣導內容..."
+                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+
+                    <!-- Live Preview Box -->
+                    <div class="mt-2 p-3 bg-white border border-indigo-100 rounded-lg">
+                        <span class="text-xs font-semibold text-gray-400 block mb-1.5"><i class="fa-solid fa-eye mr-1"></i>前台實際預覽效果：</span>
+                        <div class="flex items-center gap-2 text-sm text-gray-800 bg-blue-50 p-2.5 rounded-lg border-l-4 border-indigo-600">
+                            <i class="fa-solid fa-bullhorn text-indigo-600"></i>
+                            <div>
+                                <strong v-if="siteAnnouncement.title">{{ siteAnnouncement.title }}</strong>
+                                <span>{{ siteAnnouncement.content || '(尚未輸入宣導內文)' }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-1">
+                        <button @click="saveSiteAnnouncement"
+                            class="px-5 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">
+                            <i class="fa-solid fa-floppy-disk mr-1"></i>儲存宣導橫幅設定
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hotlines Management Card -->
+            <div class="glass-panel rounded-2xl p-6 mt-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">
+                            <i class="fa-solid fa-phone-volume mr-2 text-indigo-500"></i>資安通報窗口管理 (前台左側欄聯絡資訊)
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">
+                            自由新增、修改或刪除前台左側欄顯示的資安通報窗口名稱、分機與專線電話。
+                        </p>
+                    </div>
+                    <span class="text-xs font-medium bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full">
+                        共 {{ hotlines.length }} 組通報窗口
+                    </span>
+                </div>
+
+                <!-- Feedback Banner -->
+                <div v-if="hotlineMessage.text"
+                    :class="['mb-4 p-3 rounded-xl text-sm flex items-center justify-between border', hotlineMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200']">
+                    <div class="flex items-center">
+                        <i :class="['fa-solid mr-2', hotlineMessage.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check']"></i>
+                        <span>{{ hotlineMessage.text }}</span>
+                    </div>
+                    <button @click="hotlineMessage.text = ''" class="text-gray-400 hover:text-gray-600 ml-4">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Existing Hotlines List -->
+                <div class="space-y-2 mb-4">
+                    <div v-for="h in hotlines" :key="h.id"
+                        class="p-3.5 rounded-xl border border-gray-200 bg-white">
+                        <div v-if="editingHotlineId !== h.id" class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                            <div class="flex items-center flex-wrap gap-2">
+                                <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                    <i :class="['fa-solid', h.icon || 'fa-phone-volume']"></i>
+                                </span>
+                                <span class="font-semibold text-sm text-gray-800">{{ h.name }}</span>
+                                <span class="text-xs font-mono font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-100">
+                                    {{ h.val }}
+                                </span>
+                            </div>
+                            <div class="flex items-center space-x-2 shrink-0">
+                                <button @click="startEditHotline(h)"
+                                    class="px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                                    <i class="fa-solid fa-pen mr-1"></i>編輯
+                                </button>
+                                <button @click="deleteHotline(h)"
+                                    class="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Editing Hotline Mode -->
+                        <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">窗口名稱</label>
+                                <input v-model="editHotlineForm.name" type="text"
+                                    class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">電話 / 分機號碼</label>
+                                <input v-model="editHotlineForm.val" type="text"
+                                    class="w-full px-3 py-1.5 text-sm font-mono border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">圖示</label>
+                                <select v-model="editHotlineForm.icon"
+                                    class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <option value="fa-shield-virus">🛡️ 防護盾牌 (fa-shield-virus)</option>
+                                    <option value="fa-user-shield">👮 反詐盾牌 (fa-user-shield)</option>
+                                    <option value="fa-phone-volume">📞 電話通報 (fa-phone-volume)</option>
+                                    <option value="fa-headset">🎧 客服中心 (fa-headset)</option>
+                                    <option value="fa-mobile-screen">📱 手機號碼 (fa-mobile-screen)</option>
+                                </select>
+                            </div>
+                            <div class="flex space-x-2 justify-end">
+                                <button @click="editingHotlineId = null"
+                                    class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                    取消
+                                </button>
+                                <button @click="saveEditHotline(h.id)"
+                                    class="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">
+                                    <i class="fa-solid fa-check mr-1"></i>儲存
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add New Hotline Form -->
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                        <i class="fa-solid fa-plus-circle mr-1 text-indigo-500"></i>新增通報窗口
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+                        <div>
+                            <input v-model="newHotline.name" type="text" placeholder="窗口名稱 (例：資訊組資安專線)"
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <input v-model="newHotline.val" type="text" placeholder="電話/分機 (例：分機 #2233)"
+                                class="w-full px-3 py-2 text-sm font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <select v-model="newHotline.icon"
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="fa-shield-virus">🛡️ 防護盾牌 (fa-shield-virus)</option>
+                                <option value="fa-user-shield">👮 反詐盾牌 (fa-user-shield)</option>
+                                <option value="fa-phone-volume">📞 電話通報 (fa-phone-volume)</option>
+                                <option value="fa-headset">🎧 客服中心 (fa-headset)</option>
+                                <option value="fa-mobile-screen">📱 手機號碼 (fa-mobile-screen)</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end">
+                            <button @click="addHotline" :disabled="!newHotline.name.trim() || !newHotline.val.trim()"
+                                class="w-full md:w-auto px-5 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors disabled:opacity-50">
+                                <i class="fa-solid fa-plus mr-1"></i>新增窗口
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -256,6 +464,141 @@
                         </div>
                         <div v-if="filteredPosts.length === 0" class="text-center py-6 text-sm text-gray-400 italic">
                             找不到符合條件的文章
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dictionary & Daily Security Tips Management Card -->
+            <div class="glass-panel rounded-2xl p-6 mt-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-700">
+                            <i class="fa-solid fa-book-open mr-2 text-indigo-500"></i>防護辭典與今日資安小提醒詞庫管理
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-1">
+                            可新增、編輯或刪除「防護辭典」中的專有名詞與解說，設定的防護要點將自動納入前台右側邊欄的「今日資安小提醒」輪播庫。
+                        </p>
+                    </div>
+                    <button @click="showDictList = !showDictList"
+                        class="text-xs font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full transition-colors">
+                        <i :class="['fa-solid mr-1', showDictList ? 'fa-chevron-up' : 'fa-list-check']"></i>
+                        {{ showDictList ? '收合辭典清單' : `展開辭典列表 (${dictionary.length} 個術語)` }}
+                    </button>
+                </div>
+
+                <!-- Feedback Banner -->
+                <div v-if="dictMessage.text"
+                    :class="['mb-4 p-3 rounded-xl text-sm flex items-center justify-between border', dictMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200']">
+                    <div class="flex items-center">
+                        <i :class="['fa-solid mr-2', dictMessage.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check']"></i>
+                        <span>{{ dictMessage.text }}</span>
+                    </div>
+                    <button @click="dictMessage.text = ''" class="text-gray-400 hover:text-gray-600 ml-4">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Add New Dictionary Entry Form -->
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                        <i class="fa-solid fa-plus-circle mr-1 text-indigo-500"></i>新增資安專有名詞 / 術語
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <div class="md:col-span-3">
+                            <label class="block text-xs text-gray-500 mb-1">術語名稱 (例：零時差漏洞 (Zero-day Vulnerability))</label>
+                            <input v-model="newDict.term" type="text" placeholder="請輸入術語中英文名稱..."
+                                class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-500 mb-1">術語白話文定義與概念說明</label>
+                        <textarea v-model="newDict.definition" rows="3" placeholder="請輸入適合一般同仁理解的淺顯說明..."
+                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-500 mb-1">防護要點 / 行動建議 (每行一條，將自動作為首頁小提醒)</label>
+                        <textarea v-model="newDict.tipsText" rows="3" placeholder="例：
+開啟軟體的自動更新功能
+在官方推出修補檔前，避免開啟不明檔案
+盡量不使用停止更新的舊系統"
+                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button @click="addDictEntry" :disabled="!newDict.term.trim() || !newDict.definition.trim()"
+                            class="px-5 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors disabled:opacity-50">
+                            <i class="fa-solid fa-plus mr-1"></i>新增至防護辭典
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Collapsible Existing Dictionary Manager -->
+                <div v-if="showDictList" class="border-t border-gray-200 pt-4">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-3">
+                        <span class="text-sm font-semibold text-gray-700">現有詞彙列表 (共 {{ filteredDictionary.length }} 則)</span>
+                        <input v-model="dictSearchQuery" type="text" placeholder="搜尋詞彙名稱或定義..."
+                            class="w-full md:w-64 px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div class="max-h-96 overflow-y-auto space-y-3 pr-1">
+                        <div v-for="item in filteredDictionary" :key="item.id"
+                            class="p-4 rounded-xl border border-gray-200 bg-white">
+                            <!-- Normal Mode -->
+                            <div v-if="editingDictId !== item.id">
+                                <div class="flex items-start justify-between gap-2 mb-2">
+                                    <h4 class="font-bold text-gray-800 text-sm flex items-center">
+                                        <i class="fa-solid fa-bookmark text-indigo-500 mr-2"></i>{{ item.term }}
+                                    </h4>
+                                    <div class="flex items-center space-x-2 shrink-0">
+                                        <button @click="startEditDict(item)"
+                                            class="px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                                            <i class="fa-solid fa-pen mr-1"></i>編輯
+                                        </button>
+                                        <button @click="deleteDictEntry(item)"
+                                            class="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                                            <i class="fa-solid fa-trash mr-1"></i>刪除
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-600 leading-relaxed mb-2">{{ item.definition }}</p>
+                                <div v-if="item.tips && item.tips.length" class="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <span class="text-xs font-semibold text-gray-500 block mb-1">💡 防護小提醒：</span>
+                                    <ul class="text-xs text-gray-600 list-disc list-inside space-y-0.5">
+                                        <li v-for="(tip, tIdx) in item.tips" :key="tIdx">{{ tip }}</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Editing Mode -->
+                            <div v-else class="space-y-3">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">術語名稱</label>
+                                    <input v-model="editDictForm.term" type="text"
+                                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">定義說明</label>
+                                    <textarea v-model="editDictForm.definition" rows="3"
+                                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">防護要點 (每行一條)</label>
+                                    <textarea v-model="editDictForm.tipsText" rows="3"
+                                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                                </div>
+                                <div class="flex justify-end space-x-2">
+                                    <button @click="editingDictId = null"
+                                        class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                        取消
+                                    </button>
+                                    <button @click="saveEditDict(item.id)"
+                                        class="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">
+                                        <i class="fa-solid fa-check mr-1"></i>儲存修改
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="filteredDictionary.length === 0" class="text-center py-6 text-sm text-gray-400 italic">
+                            找不到符合條件的詞彙
                         </div>
                     </div>
                 </div>
@@ -632,6 +975,243 @@
                     isSchedulerActive: true,
                     postCount: 0
                 });
+
+                // Schedule Interval State (Item 4)
+                const scheduleInterval = ref(6);
+
+                const updateScheduleInterval = async () => {
+                    try {
+                        const res = await fetch('/api/admin/site-config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ schedule: { intervalHours: scheduleInterval.value } })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            alert(`已更新自動排程頻率為每 ${scheduleInterval.value} 小時抓取一次！`);
+                        }
+                    } catch (e) {
+                        alert('更新排程頻率失敗');
+                    }
+                };
+
+                // Site Config: Banner Announcement (Item 1)
+                const siteAnnouncement = ref({
+                    enabled: true,
+                    title: '資訊安全防護宣導：',
+                    content: '近期針對內部企業之社交工程釣魚信件頻傳，請全體同仁切勿點擊不明郵件附件或短網址，發現異常請即刻通報資訊單位！'
+                });
+                const announcementMessage = ref({ text: '', type: 'success' });
+
+                const fetchSiteConfig = async () => {
+                    try {
+                        const res = await fetch('/api/admin/site-config');
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.config) {
+                                if (data.config.announcement) siteAnnouncement.value = data.config.announcement;
+                                if (Array.isArray(data.config.hotlines)) hotlines.value = data.config.hotlines;
+                                if (data.config.schedule && data.config.schedule.intervalHours) {
+                                    scheduleInterval.value = data.config.schedule.intervalHours;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to load site config:', e);
+                    }
+                };
+
+                const saveSiteAnnouncement = async () => {
+                    try {
+                        const res = await fetch('/api/admin/site-config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ announcement: siteAnnouncement.value })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            announcementMessage.value = { text: '前台首頁宣導橫幅已成功儲存並同步更新！', type: 'success' };
+                            setTimeout(() => announcementMessage.value.text = '', 4000);
+                        } else {
+                            announcementMessage.value = { text: data.message || '儲存失敗', type: 'error' };
+                        }
+                    } catch (e) {
+                        announcementMessage.value = { text: '連線儲存失敗', type: 'error' };
+                    }
+                };
+
+                // Hotlines Management (Item 2)
+                const hotlines = ref([]);
+                const hotlineMessage = ref({ text: '', type: 'success' });
+                const newHotline = ref({ name: '', val: '', icon: 'fa-shield-virus' });
+                const editingHotlineId = ref(null);
+                const editHotlineForm = ref({ name: '', val: '', icon: 'fa-shield-virus' });
+
+                const saveHotlines = async (updatedList) => {
+                    try {
+                        const res = await fetch('/api/admin/site-config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ hotlines: updatedList })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            hotlines.value = data.config.hotlines || updatedList;
+                            return true;
+                        }
+                        return false;
+                    } catch (e) {
+                        console.error('saveHotlines error:', e);
+                        return false;
+                    }
+                };
+
+                const addHotline = async () => {
+                    if (!newHotline.value.name.trim() || !newHotline.value.val.trim()) return;
+                    const item = {
+                        id: 'hotline-' + Date.now(),
+                        name: newHotline.value.name.trim(),
+                        val: newHotline.value.val.trim(),
+                        icon: newHotline.value.icon || 'fa-phone-volume'
+                    };
+                    const nextList = [...hotlines.value, item];
+                    const ok = await saveHotlines(nextList);
+                    if (ok) {
+                        newHotline.value = { name: '', val: '', icon: 'fa-shield-virus' };
+                        hotlineMessage.value = { text: '已成功新增資安通報窗口！前台左側欄已同步。', type: 'success' };
+                        setTimeout(() => hotlineMessage.value.text = '', 3000);
+                    }
+                };
+
+                const startEditHotline = (h) => {
+                    editingHotlineId.value = h.id;
+                    editHotlineForm.value = { name: h.name, val: h.val, icon: h.icon || 'fa-phone-volume' };
+                };
+
+                const saveEditHotline = async (id) => {
+                    const nextList = hotlines.value.map(h => h.id === id ? { ...h, ...editHotlineForm.value } : h);
+                    const ok = await saveHotlines(nextList);
+                    if (ok) {
+                        editingHotlineId.value = null;
+                        hotlineMessage.value = { text: '通報窗口資訊已修改並儲存！', type: 'success' };
+                        setTimeout(() => hotlineMessage.value.text = '', 3000);
+                    }
+                };
+
+                const deleteHotline = async (h) => {
+                    if (!confirm(`確定要刪除通報窗口「${h.name}」嗎？`)) return;
+                    const nextList = hotlines.value.filter(item => item.id !== h.id);
+                    const ok = await saveHotlines(nextList);
+                    if (ok) {
+                        hotlineMessage.value = { text: `已刪除「${h.name}」`, type: 'success' };
+                        setTimeout(() => hotlineMessage.value.text = '', 3000);
+                    }
+                };
+
+                // Dictionary & Daily Tips Management (Item 3)
+                const dictionary = ref([]);
+                const dictSearchQuery = ref('');
+                const dictMessage = ref({ text: '', type: 'success' });
+                const showDictList = ref(false);
+                const newDict = ref({ term: '', definition: '', tipsText: '' });
+                const editingDictId = ref(null);
+                const editDictForm = ref({ term: '', definition: '', tipsText: '' });
+
+                const filteredDictionary = computed(() => {
+                    const q = dictSearchQuery.value.trim().toLowerCase();
+                    if (!q) return dictionary.value;
+                    return dictionary.value.filter(d =>
+                        (d.term && d.term.toLowerCase().includes(q)) ||
+                        (d.definition && d.definition.toLowerCase().includes(q))
+                    );
+                });
+
+                const fetchDictionary = async () => {
+                    try {
+                        const res = await fetch('/api/admin/dictionary');
+                        if (res.ok) {
+                            const data = await res.json();
+                            dictionary.value = data.dictionary || [];
+                        }
+                    } catch (e) {
+                        console.error('fetchDictionary error:', e);
+                    }
+                };
+
+                const addDictEntry = async () => {
+                    if (!newDict.value.term.trim() || !newDict.value.definition.trim()) return;
+                    try {
+                        const tips = newDict.value.tipsText.split('\n').map(s => s.trim()).filter(Boolean);
+                        const res = await fetch('/api/admin/dictionary', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                term: newDict.value.term.trim(),
+                                definition: newDict.value.definition.trim(),
+                                tips
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            dictMessage.value = { text: `已成功新增詞條「${newDict.value.term}」！前台辭典與每日小提醒已同步。\`, type: 'success' };
+                            newDict.value = { term: '', definition: '', tipsText: '' };
+                            fetchDictionary();
+                            setTimeout(() => dictMessage.value.text = '', 4000);
+                        } else {
+                            dictMessage.value = { text: data.message || '新增失敗', type: 'error' };
+                        }
+                    } catch (e) {
+                        dictMessage.value = { text: '新增失敗', type: 'error' };
+                    }
+                };
+
+                const startEditDict = (item) => {
+                    editingDictId.value = item.id;
+                    editDictForm.value = {
+                        term: item.term,
+                        definition: item.definition,
+                        tipsText: Array.isArray(item.tips) ? item.tips.join('\n') : ''
+                    };
+                };
+
+                const saveEditDict = async (id) => {
+                    try {
+                        const tips = editDictForm.value.tipsText.split('\n').map(s => s.trim()).filter(Boolean);
+                        const res = await fetch(`/api/admin/dictionary/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                term: editDictForm.value.term.trim(),
+                                definition: editDictForm.value.definition.trim(),
+                                tips
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            editingDictId.value = null;
+                            dictMessage.value = { text: '辭典詞條已更新！', type: 'success' };
+                            fetchDictionary();
+                            setTimeout(() => dictMessage.value.text = '', 3000);
+                        }
+                    } catch (e) {
+                        dictMessage.value = { text: '更新失敗', type: 'error' };
+                    }
+                };
+
+                const deleteDictEntry = async (item) => {
+                    if (!confirm(`確定要刪除詞條「${item.term}」嗎？`)) return;
+                    try {
+                        const res = await fetch(`/api/admin/dictionary/${item.id}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) {
+                            dictMessage.value = { text: `已刪除「${item.term}」`, type: 'success' };
+                            fetchDictionary();
+                            setTimeout(() => dictMessage.value.text = '', 3000);
+                        }
+                    } catch (e) {
+                        dictMessage.value = { text: '刪除失敗', type: 'error' };
+                    }
+                };
 
                 // Custom Announcements & Post Management (Item 2)
                 const posts = ref([]);
@@ -1121,6 +1701,8 @@
                 onMounted(() => {
                     fetchStatus();
                     fetchPosts();
+                    fetchSiteConfig();
+                    fetchDictionary();
                     fetchSources();
                     fetchEmployees();
                     fetchLogs();
@@ -1133,6 +1715,36 @@
 
                 return {
                     status,
+                    // Schedule Interval (Item 4)
+                    scheduleInterval,
+                    updateScheduleInterval,
+                    // Site Banner Announcement (Item 1)
+                    siteAnnouncement,
+                    announcementMessage,
+                    saveSiteAnnouncement,
+                    // Hotlines (Item 2)
+                    hotlines,
+                    hotlineMessage,
+                    newHotline,
+                    editingHotlineId,
+                    editHotlineForm,
+                    addHotline,
+                    startEditHotline,
+                    saveEditHotline,
+                    deleteHotline,
+                    // Dictionary & Tips (Item 3)
+                    dictionary,
+                    dictSearchQuery,
+                    dictMessage,
+                    showDictList,
+                    newDict,
+                    editingDictId,
+                    editDictForm,
+                    filteredDictionary,
+                    addDictEntry,
+                    startEditDict,
+                    saveEditDict,
+                    deleteDictEntry,
                     // Posts & Announcements (Item 2)
                     posts,
                     showPostList,

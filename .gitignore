@@ -26,3 +26,4 @@ dist-ssr
 # Data (keep RSS sources.json tracked, ignore runtime stats & sensitive employee mappings)
 backend/data/*
 !backend/data/sources.json
+!backend/data/site-config.json

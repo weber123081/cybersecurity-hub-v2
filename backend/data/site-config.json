@@ -1,0 +1,24 @@
+{
+  "announcement": {
+    "enabled": true,
+    "title": "資訊安全防護宣導：",
+    "content": "近期針對內部企業之社交工程釣魚信件頻傳，請全體同仁切勿點擊不明郵件附件或短網址，發現異常請即刻通報資訊單位！"
+  },
+  "hotlines": [
+    {
+      "id": "hotline-1",
+      "name": "內網資安專線",
+      "val": "分機 #1199",
+      "icon": "fa-shield-virus"
+    },
+    {
+      "id": "hotline-2",
+      "name": "警政署反詐專線",
+      "val": "直撥 165",
+      "icon": "fa-user-shield"
+    }
+  ],
+  "schedule": {
+    "intervalHours": 6
+  }
+}

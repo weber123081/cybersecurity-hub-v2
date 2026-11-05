@@ -19,6 +19,34 @@ const showReportModal = ref(route.query.report === '1');
 const filterCriticalOnly = ref(false);
 const filterCveOnly = ref(false);
 
+const siteAnnouncement = ref({
+  enabled: true,
+  title: '資訊安全防護宣導：',
+  content: '近期針對內部企業之社交工程釣魚信件頻傳，請全體同仁切勿點擊不明郵件附件或短網址，發現異常請即刻通報資訊單位！'
+});
+
+const hotlines = ref([
+  { id: 'hotline-1', name: '內網資安專線', val: '分機 #1199', icon: 'fa-shield-virus' },
+  { id: 'hotline-2', name: '警政署反詐專線', val: '直撥 165', icon: 'fa-user-shield' }
+]);
+
+async function fetchSiteConfig() {
+  try {
+    const res = await fetch('/api/site/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.announcement) {
+        siteAnnouncement.value = data.announcement;
+      }
+      if (Array.isArray(data.hotlines) && data.hotlines.length > 0) {
+        hotlines.value = data.hotlines;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load site config:', e);
+  }
+}
+
 const handleOpenReportEvent = () => {
   showReportModal.value = true;
 };
@@ -238,6 +266,7 @@ onMounted(() => {
     fetchLiveNews();
     fetchStats();
     fetchDictionary();
+    fetchSiteConfig();
     window.addEventListener('open-report-modal', handleOpenReportEvent);
     
     if (route.query.report === '1') {
@@ -292,16 +321,12 @@ onUnmounted(() => {
           </li>
         </ul>
       </div>
-      <div class="widget hotline-widget">
+      <div class="widget hotline-widget" v-if="hotlines.length > 0">
         <h3><i class="fa-solid fa-phone-volume" style="color: var(--danger-color);"></i> 資安通報窗口</h3>
         <div class="hotline-list">
-          <div class="hotline-row">
-            <span class="hotline-name"><i class="fa-solid fa-shield-virus"></i> 內網資安專線</span>
-            <span class="hotline-val">分機 #1199</span>
-          </div>
-          <div class="hotline-row">
-            <span class="hotline-name"><i class="fa-solid fa-user-shield"></i> 警政署反詐專線</span>
-            <span class="hotline-val">直撥 165</span>
+          <div class="hotline-row" v-for="h in hotlines" :key="h.id || h.name">
+            <span class="hotline-name"><i :class="['fa-solid', h.icon || 'fa-phone-volume']"></i> {{ h.name }}</span>
+            <span class="hotline-val">{{ h.val }}</span>
           </div>
         </div>
       </div>
@@ -310,14 +335,14 @@ onUnmounted(() => {
     <!-- Main Feed -->
     <section class="feed">
       <!-- Internal Notice Banner -->
-      <div class="announcement-banner" v-if="showAnnouncement">
+      <div class="announcement-banner" v-if="showAnnouncement && siteAnnouncement.enabled && siteAnnouncement.content">
         <div class="announcement-content">
           <div class="announcement-icon">
             <i class="fa-solid fa-bullhorn"></i>
           </div>
           <div class="announcement-text">
-            <strong>資訊安全防護宣導：</strong>
-            近期針對內部企業之社交工程釣魚信件頻傳，請全體同仁切勿點擊不明郵件附件或短網址，發現異常請即刻通報資訊單位！
+            <strong v-if="siteAnnouncement.title">{{ siteAnnouncement.title }}</strong>
+            {{ siteAnnouncement.content }}
           </div>
         </div>
         <button class="announcement-close" @click="showAnnouncement = false" title="關閉公告">
