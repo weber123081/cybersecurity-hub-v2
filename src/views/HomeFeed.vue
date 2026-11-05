@@ -17,6 +17,14 @@ const showAnnouncement = ref(true);
 const filterCriticalOnly = ref(false);
 const filterCveOnly = ref(false);
 
+// Dual Perspective: 'life' (大眾生活模式) | 'pro' (IT 專業模式)
+const viewPerspective = ref(localStorage.getItem('cyberhub_view_perspective') || 'life');
+
+function setViewPerspective(mode) {
+  viewPerspective.value = mode;
+  localStorage.setItem('cyberhub_view_perspective', mode);
+}
+
 const siteAnnouncement = ref({
   enabled: true,
   title: '資訊安全防護宣導：',
@@ -323,6 +331,43 @@ onUnmounted(() => {
         </button>
       </div>
 
+      <!-- Perspective Switcher Card (Dual Perspective: 大眾生活模式 vs IT 專業模式) -->
+      <div class="perspective-switcher-card" v-if="!loading && !fetchError">
+        <div class="perspective-tabs">
+          <button 
+            class="perspective-tab-btn" 
+            :class="{ active: viewPerspective === 'life' }"
+            @click="setViewPerspective('life')"
+          >
+            <span class="perspective-emoji">🌿</span>
+            <div class="perspective-tab-info">
+              <span class="perspective-tab-title">大眾生活模式</span>
+              <span class="perspective-tab-desc">白話生活防護 · 無痛自保 3 招</span>
+            </div>
+            <span class="perspective-tab-pill" v-if="viewPerspective === 'life'">推薦大眾</span>
+          </button>
+
+          <button 
+            class="perspective-tab-btn" 
+            :class="{ active: viewPerspective === 'pro' }"
+            @click="setViewPerspective('pro')"
+          >
+            <span class="perspective-emoji">⚙️</span>
+            <div class="perspective-tab-info">
+              <span class="perspective-tab-title">IT 專業模式</span>
+              <span class="perspective-tab-desc">CVE 漏洞 · 技術研判細節</span>
+            </div>
+            <span class="perspective-tab-pill pro-pill" v-if="viewPerspective === 'pro'">網管/技術</span>
+          </button>
+        </div>
+
+        <!-- Gentle notice for Life Mode -->
+        <div class="perspective-life-hint" v-if="viewPerspective === 'life'">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>目前已切換為<strong>「大眾生活模式」</strong>：所有艱深漏洞技術已轉化為日常場景（網購、網銀、手機、家電）與自保步驟；若需查看完整 CVE 與技術分析，可點擊上方切換至 IT 專業模式。</span>
+        </div>
+      </div>
+
       <!-- Quick Horizontal Category Chips Bar -->
       <div class="category-chips-bar" v-if="!loading && !fetchError">
         <button 
@@ -470,6 +515,7 @@ onUnmounted(() => {
             :searchQuery="searchQuery"
             :compact="feedMode === 'compact'"
             :bookmarked="bookmarkedIds.includes(post.id)"
+            :viewPerspective="viewPerspective"
             @bookmark-change="handleBookmarkChange"
             @view-tracked="handleViewTracked"
           />
@@ -1039,5 +1085,126 @@ onUnmounted(() => {
     border-color: var(--primary-color);
     background-color: var(--primary-light);
     transform: translateY(-1px);
+}
+
+/* Dual Perspective Switcher Styles */
+.perspective-switcher-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 12px);
+    box-shadow: var(--shadow-card);
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    transition: all 0.25s ease;
+}
+
+.perspective-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+}
+
+@media (max-width: 640px) {
+    .perspective-tabs {
+        grid-template-columns: 1fr;
+    }
+}
+
+.perspective-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    border: 2px solid var(--border-color);
+    background: var(--bg-main);
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+
+.perspective-tab-btn:hover {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.perspective-tab-btn.active {
+    border-color: #10b981;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.09), rgba(59, 130, 246, 0.05));
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.perspective-tab-btn:nth-child(2).active {
+    border-color: var(--primary-color);
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.09), rgba(99, 102, 241, 0.05));
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+
+.perspective-emoji {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.perspective-tab-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.perspective-tab-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.perspective-tab-desc {
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    margin-top: 1px;
+}
+
+.perspective-tab-pill {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: 9999px;
+    background: #10b981;
+    color: white;
+    flex-shrink: 0;
+}
+
+.perspective-tab-pill.pro-pill {
+    background: var(--primary-color);
+}
+
+.perspective-life-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: #065f46;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    line-height: 1.5;
+}
+
+.dark-theme .perspective-life-hint {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.perspective-life-hint i {
+    font-size: 0.9rem;
+    color: #10b981;
+    flex-shrink: 0;
 }
 </style>
