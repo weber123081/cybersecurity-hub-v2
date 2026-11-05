@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { fetchAndSave, getSources, saveSources, testSourceUrl, generateStableId, requestAbortFetch } from './fetcher.js';
 import { sendWeeklyEmail, generateWeeklyReportEmail } from './mailer.js';
 import { buildReportRows, buildThreatReportRowsAsync } from './threat-analyzer.js';
-import { testGeminiApiKey, getAiCacheStats, clearAiCache } from './gemini-analyzer.js';
+import { testGeminiApiKey, getAiCacheStats, clearAiCache, getAiCache, saveAiCache, analyzePostWithGemini } from './gemini-analyzer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -689,16 +689,73 @@ app.get('/api/admin/reports/generate', requireAuth, async (req, res) => {
             model
         });
 
+        const aiGeneratedCount = rows.filter(r => r.isAiGenerated).length;
+        const ruleBasedCount = rows.length - aiGeneratedCount;
+
         res.json({
             success: true,
             period,
             reportDate: new Date().toISOString().slice(0, 10),
             aiUsed: aiEnabled && useAi,
+            aiStats: {
+                total: rows.length,
+                aiGeneratedCount,
+                ruleBasedCount
+            },
             rows
         });
     } catch (e) {
         console.error('[API] Failed to generate report:', e);
         res.status(500).json({ success: false, message: '產出報表資料失敗: ' + e.message });
+    }
+});
+
+// 單筆情資一鍵重新請求 Gemini AI 深度思考
+app.post('/api/admin/ai/re-analyze', requireAuth, async (req, res) => {
+    try {
+        const { id, title, content } = req.body;
+        const cfg = getSiteConfig();
+        const apiKey = cfg.ai?.apiKey || process.env.GEMINI_API_KEY;
+        const model = cfg.ai?.model || 'gemini-1.5-flash-latest';
+
+        if (!apiKey) {
+            return res.status(400).json({ success: false, message: '尚未設定 Gemini API Key，無法進行 AI 研判' });
+        }
+
+        const cache = getAiCache();
+        const cacheKey = String(id || title);
+        delete cache[cacheKey];
+        saveAiCache(cache);
+
+        let post = { id, title, content };
+        if (!content && fs.existsSync(NEWS_PATH)) {
+            const posts = JSON.parse(fs.readFileSync(NEWS_PATH, 'utf8'));
+            const found = posts.find(p => p.id === id);
+            if (found) post = found;
+        }
+
+        console.log(`[Gemini AI] 單筆重新研判要求：${post.title}`);
+        const result = await analyzePostWithGemini(post, apiKey, model);
+        if (!result) {
+            return res.status(500).json({ success: false, message: 'Gemini AI 分析失敗或未回傳有效結果' });
+        }
+
+        res.json({
+            success: true,
+            message: 'AI 重新研判完成！',
+            row: {
+                id,
+                description: result.description || post.title,
+                impact: result.impact,
+                solution: result.solution,
+                isAiGenerated: true,
+                aiModel: result.model || model,
+                analyzedAt: result.analyzedAt
+            }
+        });
+    } catch (e) {
+        console.error('[API] re-analyze error:', e);
+        res.status(500).json({ success: false, message: e.message });
     }
 });
 

@@ -459,8 +459,11 @@
                                     </td>
                                     <td v-if="reportColumns.desc" class="py-3 px-3 align-top leading-relaxed text-gray-800 break-words">
                                         <div class="font-medium text-gray-900">{{ row.description }}
-                                            <span v-if="row.isAiGenerated" class="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-0.5 rounded ml-1 border border-indigo-200" title="此情資之可能影響與因應方案經 Gemini AI 深度思考研判">
-                                                <i class="fa-solid fa-brain"></i> AI研判
+                                            <span v-if="row.isAiGenerated" class="inline-flex items-center gap-1 bg-gradient-to-r from-indigo-600 to-sky-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs ml-1" :title="'由 ' + (row.aiModel || 'Gemini AI') + ' 深度研判產出'">
+                                                <i class="fa-solid fa-brain"></i> Gemini 深度研判
+                                            </span>
+                                            <span v-else class="inline-flex items-center gap-1 bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-300 ml-1" title="由語意規則引擎產生">
+                                                <i class="fa-solid fa-bolt"></i> 規則引擎
                                             </span></div>
                                         <div v-if="row.cves && row.cves.length > 0" class="mt-1 flex flex-wrap gap-1">
                                             <span v-for="c in row.cves" :key="c" class="px-1.5 py-0.2 rounded text-[10px] bg-red-50 text-red-700 font-mono font-bold border border-red-200 whitespace-nowrap">
@@ -485,8 +488,14 @@
                                     </td>
                                     <td class="py-3 px-2 text-center align-top space-y-1">
                                         <button @click="openRowEditModal(idx)"
-                                            class="w-full px-1.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold border border-indigo-200 flex items-center justify-center gap-1 transition-colors">
-                                            <i class="fa-solid fa-pen-to-square"></i> 編輯
+                                            class="w-full px-1.5 py-1 bg-white hover:bg-gray-50 text-gray-700 rounded text-[11px] font-bold border border-gray-300 flex items-center justify-center gap-1 transition-colors shadow-xs">
+                                            <i class="fa-solid fa-pen-to-square text-indigo-500"></i> 編輯
+                                        </button>
+                                        <button @click="reAnalyzeRowWithAi(row, idx)" :disabled="reAnalyzingIndex === idx"
+                                            class="w-full px-1.5 py-1 bg-gradient-to-r from-indigo-50 to-sky-50 hover:from-indigo-100 hover:to-sky-100 text-indigo-700 rounded text-[11px] font-bold border border-indigo-200 flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer"
+                                            title="點擊讓 Gemini AI 針對此筆情資重新深度思考研判">
+                                            <i :class="['fa-solid', reAnalyzingIndex === idx ? 'fa-spinner fa-spin' : 'fa-brain']"></i>
+                                            <span>{{ reAnalyzingIndex === idx ? '研判中' : 'AI重新研判' }}</span>
                                         </button>
                                         <div class="flex gap-1 justify-center">
                                             <button @click="moveReportRow(idx, -1)" :disabled="idx === 0" title="上移"
@@ -2134,6 +2143,11 @@ all-staff@company.com"
                         if (res.ok) {
                             const data = await res.json();
                             reportRows.value = data.rows || [];
+                            if (data.aiStats) {
+                                reportAiStats.value = data.aiStats;
+                            } else {
+                                updateAiStats();
+                            }
                             reportDate.value = data.reportDate ? data.reportDate.replace(/-/g, '/') : reportDate.value;
                         } else {
                             alert('產出情資報表失敗');
@@ -3224,6 +3238,10 @@ all-staff@company.com"
                     saveAiConfig,
                     testAiConnection,
                     clearAiCacheConfirm,
+                    reAnalyzingIndex,
+                    reportAiStats,
+                    reAnalyzeRowWithAi,
+                    updateAiStats,
                     reportDate,
                     reportMaxRows,
                     reportRows,

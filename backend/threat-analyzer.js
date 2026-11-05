@@ -448,11 +448,14 @@ export async function buildThreatReportRowsAsync(posts, options = {}) {
                 row.description = cache[cacheKey].description;
             }
             row.isAiGenerated = true;
+            row.aiModel = cache[cacheKey].model || model;
+            row.analyzedAt = cache[cacheKey].analyzedAt;
             continue;
         }
 
         try {
             const originalPost = posts.find(p => p.id === row.id) || { title: row.description, content: row.description };
+            console.log(`[Gemini AI] 正在呼叫 Google API 深度研判 (${i + 1}/${baseRows.length})：${originalPost.title.slice(0, 35)}...`);
             const aiResult = await analyzePostWithGemini(originalPost, apiKey, model);
             if (aiResult) {
                 row.impact = aiResult.impact;
@@ -461,6 +464,8 @@ export async function buildThreatReportRowsAsync(posts, options = {}) {
                     row.description = aiResult.description;
                 }
                 row.isAiGenerated = true;
+                row.aiModel = aiResult.model || model;
+                row.analyzedAt = aiResult.analyzedAt;
             }
         } catch (e) {
             console.warn(`[ThreatAnalyzer] AI error for item ${row.id}, falling back to rule-based:`, e.message);
