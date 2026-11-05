@@ -36,6 +36,14 @@ const clearNavSearch = () => {
   }
 };
 
+const openMonthlyReport = () => {
+  if (route.path !== '/') {
+    router.push({ path: '/', query: { report: '1' } });
+  } else {
+    window.dispatchEvent(new CustomEvent('open-report-modal'));
+  }
+};
+
 // Global '/' keyboard shortcut to focus search
 const handleGlobalKeydown = (e) => {
   if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
@@ -122,6 +130,9 @@ onUnmounted(() => {
         <router-link to="/lab" active-class="active">
           <i class="fa-solid fa-flask"></i> 實戰演練
         </router-link>
+        <button class="nav-report-btn" @click="openMonthlyReport" title="一鍵自動篩選最嚴重高危情資、排除重複並匯出月報表格">
+          <i class="fa-solid fa-file-shield"></i> 匯出月報
+        </button>
       </div>
 
       <div class="user-profile">
@@ -228,6 +239,29 @@ onUnmounted(() => {
 
 .nav-search-clear:hover {
     color: var(--text-primary);
+}
+
+.nav-report-btn {
+    background: linear-gradient(135deg, #ef4444, #ea580c);
+    color: #ffffff;
+    border: none;
+    padding: 0.42rem 0.95rem;
+    border-radius: 20px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    box-shadow: 0 3px 10px rgba(239, 68, 68, 0.35);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.nav-report-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(239, 68, 68, 0.45);
+    filter: brightness(1.06);
 }
 
 @media (max-width: 900px) {
