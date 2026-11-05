@@ -31,5 +31,10 @@
     "attachCsv": false,
     "lastSentTime": null,
     "lastSentStatus": null
+  },
+  "ai": {
+    "enabled": true,
+    "apiKey": "",
+    "model": "gemini-1.5-flash-latest"
   }
 }

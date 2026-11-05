@@ -2000,6 +2000,11 @@ all-staff@company.com"
                 };
 
                 const saveAiConfig = async () => {
+                    const rawKey = aiKeyInput.value.trim();
+                    if (rawKey && /[\u4e00-\u9fa5]/.test(rawKey)) {
+                        alert('偵測到輸入框內含有中文字，這通常是不小心複製到了錯誤訊息或提示文字。\n\n請注意：標準 Gemini API Key 格式為純英數字組合（通常以「AIzaSy」開頭），請確認後重新貼上！');
+                        return;
+                    }
                     isSavingAi.value = true;
                     try {
                         const res = await fetch('/api/admin/ai/config', {
@@ -2027,6 +2032,11 @@ all-staff@company.com"
                 };
 
                 const testAiConnection = async () => {
+                    const rawKey = aiKeyInput.value.trim();
+                    if (rawKey && /[\u4e00-\u9fa5]/.test(rawKey)) {
+                        alert('偵測到輸入框內含有中文字，這通常是不小心複製到了錯誤訊息或提示文字。\n\n請注意：標準 Gemini API Key 格式為純英數字組合（通常以「AIzaSy」開頭），請確認後重新貼上！');
+                        return;
+                    }
                     isTestingAi.value = true;
                     try {
                         const res = await fetch('/api/admin/ai/test', {

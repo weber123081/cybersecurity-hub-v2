@@ -53,11 +53,24 @@ export function getAiCacheStats() {
     };
 }
 
+export function cleanAndValidateApiKey(key) {
+    if (!key) throw new Error('請提供 API Key');
+    const cleaned = String(key).trim().replace(/^['"`]|['"`]$/g, '').replace(/^Bearer\s+/i, '').trim();
+    if (/[\u4e00-\u9fa5]/.test(cleaned) || cleaned.includes('連線失敗') || cleaned.includes('API 驗證失敗')) {
+        throw new Error('您輸入的內容包含中文字或提示文字，並非真正的 Gemini API Key。請注意：標準 API Key 是以「AIzaSy」開頭的 39 碼英數字串！');
+    }
+    if (cleaned.length < 20) {
+        throw new Error('輸入的金鑰長度過短，請確認已完整複製以「AIzaSy」開頭的字串。');
+    }
+    return cleaned;
+}
+
 /**
  * 查詢此 API Key 支援哪些模型 (ModelService.ListModels)
  */
 export async function fetchAvailableModels(apiKey) {
     if (!apiKey) return [];
+    const key = cleanAndValidateApiKey(apiKey);
     for (const ver of ['v1beta', 'v1']) {
         try {
             const res = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${apiKey}`);
@@ -78,8 +91,8 @@ export async function fetchAvailableModels(apiKey) {
 /**
  * 測試 Gemini API Key 連線並自動適配最佳模型
  */
-export async function testGeminiApiKey(apiKey, requestedModel = 'gemini-1.5-flash') {
-    if (!apiKey) throw new Error('請提供 API Key');
+export async function testGeminiApiKey(rawApiKey, requestedModel = 'gemini-1.5-flash') {
+    const apiKey = cleanAndValidateApiKey(rawApiKey);
 
     // 1. 優先向 Google 查詢該 Key 真正開通了哪些模型
     const availableModels = await fetchAvailableModels(apiKey);
@@ -168,8 +181,14 @@ export async function testGeminiApiKey(apiKey, requestedModel = 'gemini-1.5-flas
 /**
  * 使用 Gemini AI 深度分析單則資安情資（支援自動重試可用模型）
  */
-export async function analyzePostWithGemini(post, apiKey, requestedModel = 'gemini-1.5-flash') {
-    if (!post || !apiKey) return null;
+export async function analyzePostWithGemini(post, rawApiKey, requestedModel = 'gemini-1.5-flash') {
+    if (!post || !rawApiKey) return null;
+    let apiKey;
+    try {
+        apiKey = cleanAndValidateApiKey(rawApiKey);
+    } catch (e) {
+        return null;
+    }
 
     const cacheKey = String(post.id || post.title);
     const cache = getAiCache();
