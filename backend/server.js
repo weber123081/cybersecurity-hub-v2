@@ -5,7 +5,7 @@ import cron from 'node-cron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { fetchAndSave, getSources, saveSources, testSourceUrl, generateStableId } from './fetcher.js';
+import { fetchAndSave, getSources, saveSources, testSourceUrl, generateStableId, requestAbortFetch } from './fetcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -422,8 +422,18 @@ app.get('/api/status', requireAuth, (req, res) => {
 });
 
 app.post('/api/fetch', requireAuth, (req, res) => {
+    if (isFetching) {
+        return res.json({ success: false, message: '爬蟲任務正在執行中' });
+    }
     performFetch();
     res.json({ success: true });
+});
+
+app.post(['/api/fetch/abort', '/api/admin/fetch/abort'], requireAuth, (req, res) => {
+    requestAbortFetch();
+    isFetching = false;
+    console.log('[SERVER] Fetch process aborted by user.');
+    res.json({ success: true, message: '已成功中止爬蟲抓取任務！' });
 });
 
 app.post('/api/scheduler/toggle', requireAuth, (req, res) => {

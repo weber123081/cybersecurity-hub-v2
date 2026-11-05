@@ -11,7 +11,14 @@ const __dirname = path.dirname(__filename);
 // Allow self-signed certificates in environments with SSL/TLS inspection or corporate proxies
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
+let isAbortRequested = false;
+export function requestAbortFetch() {
+    isAbortRequested = true;
+    console.log('[FETCHER] Abort requested by user/admin.');
+}
+
 const parser = new Parser({
+    timeout: 8000,
     requestOptions: {
         rejectUnauthorized: false
     },
@@ -100,6 +107,7 @@ const defaultCat = { category: '綜合動態', icon: 'fa-shield-halved' };
 async function scrapeFullContent(url) {
     try {
         const res = await fetch(url, {
+            signal: AbortSignal.timeout(6000),
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -199,21 +207,34 @@ async function translateText(text, retries = 3) {
 
     const translatedChunks = [];
     for (const chunk of chunks) {
+        if (isAbortRequested) {
+            translatedChunks.push(chunk);
+            break;
+        }
         for (let i = 0; i < retries; i++) {
+            if (isAbortRequested) {
+                translatedChunks.push(chunk);
+                break;
+            }
             try {
                 // Add a polite delay between each translation chunk
-                await new Promise(r => setTimeout(r, 1500));
+                await new Promise(r => setTimeout(r, 1000));
                 const res = await translate(chunk, { to: 'zh-tw' });
                 translatedChunks.push(res);
                 break;
             } catch (e) {
                 console.error(`Chunk translation error (Attempt ${i + 1}):`, e.message);
+                // If offline / DNS failed, skip retrying to prevent long freeze
+                if (e.message && (e.message.includes('ENOTFOUND') || e.message.includes('fetch failed') || e.message.includes('ECONNREFUSED') || e.message.includes('ETIMEDOUT'))) {
+                    console.warn(`  -> Network offline / unreachable, skipping further retries.`);
+                    translatedChunks.push(chunk);
+                    break;
+                }
                 if (i === retries - 1) {
                     translatedChunks.push(chunk); // Fallback to original for this chunk
                 } else {
-                    // Significant wait if we hit an error (likely rate limit)
-                    const wait = (i + 1) * 8000;
-                    console.log(`  -> Rate-limit suspected. Waiting ${wait / 1000}s...`);
+                    const wait = (i + 1) * 3000;
+                    console.log(`  -> Retrying after ${wait / 1000}s...`);
                     await new Promise(r => setTimeout(r, wait));
                 }
             }
@@ -224,6 +245,7 @@ async function translateText(text, retries = 3) {
 }
 
 export async function fetchAndSave() {
+    isAbortRequested = false;
     console.log(`[${new Date().toISOString()}] Starting global intelligence fetch...`);
 
     const allSources = getSources();
@@ -254,6 +276,10 @@ export async function fetchAndSave() {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     for (const source of activeSources) {
+        if (isAbortRequested) {
+            console.log(`[FETCHER] Abort requested, breaking out of source loop.`);
+            break;
+        }
         console.log(`\n[${new Date().toISOString()}] Fetching RSS feed from: ${source.name} (${source.url})`);
         try {
             const feed = await parser.parseURL(source.url);
@@ -268,6 +294,10 @@ export async function fetchAndSave() {
             console.log(`[${source.name}] Found ${recentItems.length} items from the last 30 days.`);
 
             for (let i = 0; i < recentItems.length; i++) {
+                if (isAbortRequested) {
+                    console.log(`[FETCHER] Abort requested, breaking out of item loop.`);
+                    break;
+                }
                 const item = recentItems[i];
 
                 // 2. Check for keywords FIRST for categorization
