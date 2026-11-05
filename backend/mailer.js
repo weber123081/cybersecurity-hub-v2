@@ -50,8 +50,10 @@ export function generateWeeklyReportEmail(posts, config = {}) {
             <td style="border: 1px solid #d1d5db; padding: 10px 12px; font-size: 13px; line-height: 1.5; color: #047857; vertical-align: top;">
                 ${escapeHtml(r.solution)}
             </td>
-            <td style="border: 1px solid #d1d5db; padding: 10px 8px; font-size: 12px; color: #4b5563; vertical-align: top;">
-                ${escapeHtml(r.note)}
+            <td style="border: 1px solid #d1d5db; padding: 10px 8px; font-size: 11px; vertical-align: top; word-break: break-all;">
+                ${(r.note && (r.note.startsWith('http://') || r.note.startsWith('https://')))
+                    ? `<a href="${escapeHtml(r.note)}" target="_blank" style="color: #4338ca; text-decoration: underline; font-family: monospace;">${escapeHtml(r.note)}</a>`
+                    : escapeHtml(r.note || '-')}
             </td>
         </tr>
     `).join('');
@@ -95,7 +97,7 @@ export function generateWeeklyReportEmail(posts, config = {}) {
                             <th style="border: 1px solid #374151; padding: 10px 12px; width: 260px; text-align: left;">威脅情資說明</th>
                             <th style="border: 1px solid #374151; padding: 10px 12px; width: 200px; text-align: left;">可能之影響</th>
                             <th style="border: 1px solid #374151; padding: 10px 12px; width: 230px; text-align: left;">因應方案</th>
-                            <th style="border: 1px solid #374151; padding: 10px 8px; width: 180px; text-align: left;">備註</th>
+                            <th style="border: 1px solid #374151; padding: 10px 8px; width: 180px; text-align: left;">網頁連結</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -114,7 +116,7 @@ export function generateWeeklyReportEmail(posts, config = {}) {
     `;
 
     // Generate CSV (UTF-8 with BOM)
-    const csvHeader = '\uFEFF搜集日期,搜集來源,威脅情資說明,可能之影響,因應方案,備註\n';
+    const csvHeader = '\uFEFF搜集日期,搜集來源,威脅情資說明,可能之影響,因應方案,網頁連結\n';
     const csvRows = rows.map(r => {
         const clean = str => `"${String(str || '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ')}"`;
         return [

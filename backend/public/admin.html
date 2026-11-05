@@ -272,7 +272,7 @@
                                 </label>
                                 <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
                                     <input type="checkbox" v-model="reportColumns.note" class="rounded text-indigo-600 mr-1.5">
-                                    備註
+                                    網頁連結
                                 </label>
                             </div>
                         </div>
@@ -380,7 +380,7 @@
                                     <th v-if="reportColumns.desc" class="py-3 px-3">威脅情資說明</th>
                                     <th v-if="reportColumns.impact" class="py-3 px-3">可能之影響</th>
                                     <th v-if="reportColumns.solution" class="py-3 px-3">因應方案</th>
-                                    <th v-if="reportColumns.note" class="py-3 px-3">備註</th>
+                                    <th v-if="reportColumns.note" class="py-3 px-3">網頁連結</th>
                                     <th class="py-3 px-2 text-center w-20">操作</th>
                                 </tr>
                             </thead>
@@ -411,8 +411,14 @@
                                     <td v-if="reportColumns.solution" class="py-3 px-3 align-top leading-relaxed text-emerald-900 bg-emerald-50/20 break-words">
                                         {{ row.solution }}
                                     </td>
-                                    <td v-if="reportColumns.note" class="py-3 px-3 align-top leading-relaxed text-gray-600 break-words">
-                                        {{ row.note }}
+                                    <td v-if="reportColumns.note" class="py-3 px-3 align-top leading-relaxed text-indigo-700 break-all">
+                                        <a v-if="row.note && (row.note.startsWith('http://') || row.note.startsWith('https://'))"
+                                            :href="row.note" target="_blank"
+                                            class="hover:underline inline-flex items-start gap-1 text-[11px] text-indigo-600 font-mono hover:text-indigo-800">
+                                            <i class="fa-solid fa-arrow-up-right-from-square mt-0.5 shrink-0 text-indigo-400"></i>
+                                            <span class="break-all">{{ row.note }}</span>
+                                        </a>
+                                        <span v-else class="text-gray-600 text-xs">{{ row.note || '-' }}</span>
                                     </td>
                                     <td class="py-3 px-2 text-center align-top space-y-1">
                                         <button @click="openRowEditModal(idx)"
@@ -485,15 +491,20 @@
 
                             <div>
                                 <div class="flex items-center justify-between mb-1">
-                                    <label class="text-xs font-bold text-gray-700">備註 (Remarks & Context)</label>
-                                    <div class="flex gap-1">
-                                        <button @click="appendNoteTemplate('unused')" type="button" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 hover:bg-gray-200">+本單位未導入</button>
-                                        <button @click="appendNoteTemplate('patched')" type="button" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200">+已清查更新</button>
-                                        <button @click="appendNoteTemplate('schedule')" type="button" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 hover:bg-amber-200">+列入排程</button>
+                                    <label class="text-xs font-bold text-indigo-700">網頁連結 (情資原始公告網址)</label>
+                                    <div class="flex gap-1 items-center">
+                                        <a v-if="editingRow.note && (editingRow.note.startsWith('http://') || editingRow.note.startsWith('https://'))"
+                                            :href="editingRow.note" target="_blank" class="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1 font-medium">
+                                            <i class="fa-solid fa-arrow-up-right-from-square"></i> 開啟此連結
+                                        </a>
+                                        <button v-if="editingRow.originalUrl && editingRow.note !== editingRow.originalUrl"
+                                            @click="editingRow.note = editingRow.originalUrl" type="button" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 hover:bg-gray-200">
+                                            還原原始連結
+                                        </button>
                                     </div>
                                 </div>
-                                <textarea v-model="editingRow.note" rows="3"
-                                    class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                                <textarea v-model="editingRow.note" rows="2" placeholder="例：https://www.ithome.com.tw/news/..."
+                                    class="w-full px-3 py-2 text-xs font-mono bg-white border border-indigo-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
                             </div>
                         </div>
 
@@ -2060,7 +2071,7 @@ all-staff@company.com"
                     if (cols.desc) headers.push('威脅情資說明');
                     if (cols.impact) headers.push('可能之影響');
                     if (cols.solution) headers.push('因應方案');
-                    if (cols.note) headers.push('備註');
+                    if (cols.note) headers.push('網頁連結');
 
                     const clean = (val) => '"' + String(val || '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ') + '"';
                     const rowsCsv = reportRows.value.map(r => {
@@ -2102,7 +2113,7 @@ all-staff@company.com"
                     if (cols.desc) ths.push('<th>威脅情資說明</th>');
                     if (cols.impact) ths.push('<th>可能之影響</th>');
                     if (cols.solution) ths.push('<th>因應方案</th>');
-                    if (cols.note) ths.push('<th>備註</th>');
+                    if (cols.note) ths.push('<th style="width: 140px; text-align: left;">網頁連結</th>');
 
                     const rowsHtml = reportRows.value.map((r, i) => {
                         const tds = [];
@@ -2112,7 +2123,7 @@ all-staff@company.com"
                         if (cols.desc) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #0f172a; word-break: break-word;">${r.description}</td>`);
                         if (cols.impact) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #b91c1c; word-break: break-word;">${r.impact}</td>`);
                         if (cols.solution) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #047857; word-break: break-word;">${r.solution}</td>`);
-                        if (cols.note) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 8px; font-size: 11px; line-height: 1.4; color: #334155; word-break: break-word;">${r.note}</td>`);
+                        if (cols.note) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 8px; font-size: 10px; line-height: 1.4; color: #312e81; word-break: break-all; font-family: monospace;">${(r.note && (r.note.startsWith('http://') || r.note.startsWith('https://'))) ? `<a href="${r.note}" target="_blank" style="color: #312e81; text-decoration: underline;">${r.note}</a>` : (r.note || '-')}</td>`);
                         return `<tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f9fafb'};">${tds.join('')}</tr>`;
                     }).join('');
 

@@ -397,8 +397,9 @@ export function buildReportRows(posts, options = {}) {
         // 欄位 5：因應方案 (具體、分層級、非千篇一律)
         const solution = generateMitigation(platform, vulnType, concreteAdvice, meta, combinedText);
 
-        // 欄位 6：備註 (專業評估、處置指引、來源鏈接)
-        const note = generateRemarks(platform, vulnType, meta, post);
+        // 欄位 6：網頁連結 (優先填入原始情報公告網址 originalUrl)
+        const webLink = post.originalUrl || post.link || post.url || '';
+        const note = webLink || generateRemarks(platform, vulnType, meta, post);
 
         rows.push({
             id: post.id,
@@ -408,10 +409,11 @@ export function buildReportRows(posts, options = {}) {
             impact,
             solution,
             note,
+            url: webLink,
             cves: meta.cves,
             cvss: meta.cvss,
             score: meta.score,
-            originalUrl: post.originalUrl || post.link || ''
+            originalUrl: webLink
         });
 
         if (rows.length >= maxCount) break;
