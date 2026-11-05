@@ -295,7 +295,7 @@ all-staff@company.com"
                                 </div>
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1">連接埠 (Port)</label>
-                                    <input v-model.number="emailConfig.smtpPort" type="number" placeholder="587 / 25 / 465"
+                                    <input v-model.number="emailConfig.smtpPort" @input="onSmtpPortChange" type="number" placeholder="587 / 25 / 465"
                                         class="w-full px-3 py-1.5 text-xs font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                 </div>
                             </div>
@@ -1479,6 +1479,15 @@ all-staff@company.com"
                     }
                 };
 
+                const onSmtpPortChange = () => {
+                    const port = Number(emailConfig.value.smtpPort);
+                    if (port === 465) {
+                        emailConfig.value.smtpSecure = true;
+                    } else if (port === 587 || port === 25) {
+                        emailConfig.value.smtpSecure = false;
+                    }
+                };
+
                 const applySmtpPreset = (preset) => {
                     if (preset === 'o365') {
                         emailConfig.value.smtpHost = 'smtp.office365.com';
@@ -2332,6 +2341,7 @@ all-staff@company.com"
                     emailMessage,
                     isSendingTest,
                     saveEmailConfig,
+                    onSmtpPortChange,
                     applySmtpPreset,
                     sendTestEmail,
                     // Schedule Interval (Item 4)

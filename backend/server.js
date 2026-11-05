@@ -596,9 +596,24 @@ app.put('/api/admin/email-config', requireAuth, (req, res) => {
     res.json({ success: true, emailConfig: cfg.emailWeeklyReport });
 });
 
+function formatSmtpErrorMessage(err) {
+    const msg = (err && err.message) ? err.message : String(err);
+    if (/wrong version number|ssl3_get_record/i.test(msg)) {
+        return 'SSL/TLS 協定版本不匹配 (wrong version number)！\n【原因】：在 Port 587 或 Port 25 上開啟了「強制 SSL/TLS」，或是將連線導向了非 SSL 協定的埠號。\n【解決方法】：\n1. 若使用 Port 587 (Office 365 / Gmail 等)，請【取消勾選】「強制 SSL/TLS」（系統會透過標準 STARTTLS 自動加密）。\n2. 若需強制直連 SSL，請將連接埠改為【465】。\n3. 若使用企業內網 Relay (Port 25)，請【取消勾選】「強制 SSL/TLS」且密碼留空。';
+    }
+    if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND/i.test(msg)) {
+        return '連線失敗 (' + (err.code || 'TIMEOUT') + ')：無法連線至指定的 SMTP 伺服器主機與埠號，請確認主機名稱是否正確，或公司防火牆是否阻擋該 SMTP 連接埠。';
+    }
+    if (/Invalid login|authentication failed|535|Username and Password not accepted/i.test(msg)) {
+        return 'SMTP 認證失敗：帳號或密碼錯誤。\n提示：若使用 Gmail 請務必至 Google 帳戶產生「應用程式專用密碼」；若使用 Office 365 請確認是否有開啟 SMTP AUTH 權限。';
+    }
+    return msg;
+}
+
 app.post('/api/admin/email-config/test', requireAuth, async (req, res) => {
     try {
         const testOptions = req.body || {};
+        console.log(`[API] Testing email dispatch to: ${testOptions.recipients} via ${testOptions.smtpHost}:${testOptions.smtpPort}`);
         const result = await sendWeeklyEmail(testOptions);
         res.json({
             success: true,
@@ -609,7 +624,7 @@ app.post('/api/admin/email-config/test', requireAuth, async (req, res) => {
         console.error('[API] Test email failed:', e.message);
         res.status(400).json({
             success: false,
-            message: `測試郵件寄送失敗：${e.message}`
+            message: '測試郵件寄送失敗：' + formatSmtpErrorMessage(e)
         });
     }
 });
@@ -627,10 +642,11 @@ app.post('/api/admin/email-config/send-now', requireAuth, async (req, res) => {
         saveSiteConfig(cfg);
         res.json({ success: true, message: '已成功發送週報！', result });
     } catch (e) {
+        const friendlyMsg = formatSmtpErrorMessage(e);
         emailCfg.lastSentTime = new Date().toISOString();
         emailCfg.lastSentStatus = `發送失敗: ${e.message}`;
         saveSiteConfig(cfg);
-        res.status(400).json({ success: false, message: `發送失敗：${e.message}` });
+        res.status(400).json({ success: false, message: '發送失敗：' + friendlyMsg });
     }
 });
 

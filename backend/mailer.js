@@ -313,11 +313,26 @@ export async function sendWeeklyEmail(options = {}) {
 
     const report = generateWeeklyReportEmail(posts, options);
 
-    // Create transporter
+    // Create transporter with proper SSL / STARTTLS negotiation
+    const port = parseInt(smtpPort) || 587;
+    // Port 465 is direct SSL/TLS socket wrapper (secure: true).
+    // Port 587 & 25 use STARTTLS or cleartext handshake (secure MUST be false in Nodemailer,
+    // otherwise OpenSSL throws 'wrong version number' because server greets in cleartext SMTP).
+    let isSecure = false;
+    if (port === 465) {
+        isSecure = true;
+    } else if (port === 587 || port === 25) {
+        isSecure = false;
+    } else {
+        isSecure = Boolean(smtpSecure);
+    }
+
+    console.log(`[MAILER] Connecting to SMTP ${smtpHost}:${port} (secure: ${isSecure}, user: ${smtpUser ? smtpUser : 'none'})...`);
+
     const transporter = nodemailer.createTransport({
         host: smtpHost,
-        port: parseInt(smtpPort) || 587,
-        secure: Boolean(smtpSecure) || parseInt(smtpPort) === 465,
+        port: port,
+        secure: isSecure,
         auth: (smtpUser && smtpPass) ? {
             user: smtpUser,
             pass: smtpPass
