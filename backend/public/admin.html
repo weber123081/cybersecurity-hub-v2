@@ -41,7 +41,7 @@
 
 <body>
     <div id="app" class="min-h-screen p-6">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div :class="[currentTab === 'reports' ? 'w-full max-w-[99vw] px-2 sm:px-4 lg:px-6' : 'max-w-7xl px-4 sm:px-6 lg:px-8', 'mx-auto transition-all duration-150']">
             <!-- Header -->
             <header class="mb-8 flex justify-between items-center">
                 <div>
@@ -50,10 +50,6 @@
                     <p class="text-gray-500 mt-1">生活資安觀測站 (Cybersecurity Hub V2)</p>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <a href="/?report=1" target="_blank"
-                        class="bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-2 rounded-full shadow-sm text-sm font-bold hover:opacity-95 transition-opacity">
-                        <i class="fa-solid fa-file-shield mr-1"></i> 匯出高危月報
-                    </a>
                     <a href="/" target="_blank"
                         class="bg-white text-indigo-600 px-4 py-2 rounded-full shadow-sm border border-indigo-100 text-sm font-medium hover:bg-indigo-50 transition-colors">
                         <i class="fa-solid fa-up-right-from-square mr-1"></i> 前往前台
@@ -188,21 +184,21 @@
             <!-- ========================================================= -->
             <!-- TAB: Threat Report Center (週報 / 月報彙整中心) -->
             <!-- ========================================================= -->
-            <div v-show="currentTab === 'reports'" class="space-y-6">
-                <!-- Top Toolbar Card -->
-                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden">
-                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+            <div v-show="currentTab === 'reports'" class="space-y-5">
+                <!-- Top Export & Generation Settings Card -->
+                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden space-y-5 shadow-sm">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="bg-indigo-100 text-indigo-700 text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">Intelligence Report Center</span>
-                                <span class="text-xs text-gray-500 font-mono">正式六欄資安情報彙整標準</span>
+                                <span class="bg-indigo-100 text-indigo-700 text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">Report Configuration</span>
+                                <span class="text-xs text-gray-500 font-mono">自訂勾選設定與輸出控制</span>
                             </div>
                             <h2 class="text-xl font-bold text-gray-800 mt-1 flex items-center gap-2">
                                 <i class="fa-solid fa-file-shield text-indigo-600"></i>
-                                資安情資週報 / 月報彙整管理
+                                資安情報週報 / 月報彙整中心
                             </h2>
-                            <p class="text-xs text-gray-500 mt-1">
-                                專為資安長與維運團隊設計：依真實威脅分析自動產出「搜集日期、搜集來源、威脅情資說明、可能之影響、因應方案、備註」，可線上修改客製，一鍵匯出 CSV、列印 PDF 或派信。
+                            <p class="text-xs text-gray-500 mt-0.5">
+                                版面已最佳化為滿版寬螢幕顯示，下方可自由勾選欲收錄之篩選條件與匯出欄位，所有情資均支援線上即時編輯微調。
                             </p>
                         </div>
 
@@ -211,68 +207,133 @@
                             <button @click="setReportPeriod('week')"
                                 :class="['px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer', reportPeriod === 'week' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900']">
                                 <i class="fa-solid fa-calendar-week"></i>
-                                <span>近 7 天情資週報</span>
+                                <span>📅 近 7 天情資週報</span>
                             </button>
                             <button @click="setReportPeriod('month')"
                                 :class="['px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer', reportPeriod === 'month' ? 'bg-white text-rose-700 shadow-sm' : 'text-gray-600 hover:text-gray-900']">
                                 <i class="fa-solid fa-calendar-days"></i>
-                                <span>近 30 天高危月報</span>
+                                <span>📅 近 30 天高危月報</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Configuration Controls Bar -->
-                    <div class="pt-5 flex flex-wrap items-center justify-between gap-4">
-                        <div class="flex flex-wrap items-center gap-4 text-xs">
-                            <div class="flex items-center gap-2">
-                                <label class="font-bold text-gray-600">報表日期：</label>
-                                <input v-model="reportDate" type="text" placeholder="YYYY/MM/DD"
-                                    class="w-32 px-3 py-1.5 font-mono text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            </div>
+                    <!-- Self-Service Checkbox Settings Section -->
+                    <div class="bg-gray-50/90 p-4 rounded-xl border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+                        <!-- Column 1: 收錄篩選設定 -->
+                        <div class="space-y-2">
+                            <h4 class="font-bold text-gray-700 flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
+                                <i class="fa-solid fa-filter text-indigo-500"></i>
+                                1. 情資收錄條件篩選
+                            </h4>
+                            <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                <input type="checkbox" v-model="reportFilters.cveOnly" @change="generateReportRows(false)" class="rounded text-indigo-600 mr-2">
+                                僅收錄具備 CVE 編號之情報
+                            </label>
+                            <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                <input type="checkbox" v-model="reportFilters.highSeverityOnly" @change="generateReportRows(false)" class="rounded text-indigo-600 mr-2">
+                                僅收錄高危 / 重大等級 (CVSS ≥ 7.0)
+                            </label>
+                            <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                <input type="checkbox" v-model="reportFilters.deduplicate" @change="generateReportRows(false)" class="rounded text-indigo-600 mr-2">
+                                啟用智慧去重複 (排除同產品/重複CVE)
+                            </label>
+                            <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                <input type="checkbox" v-model="reportFilters.excludeDigest" @change="generateReportRows(false)" class="rounded text-indigo-600 mr-2">
+                                排除【資安日報】總覽整合型文章
+                            </label>
+                        </div>
 
-                            <div class="flex items-center gap-2">
-                                <label class="font-bold text-gray-600">收錄筆數：</label>
+                        <!-- Column 2: 匯出欄位勾選 -->
+                        <div class="space-y-2">
+                            <h4 class="font-bold text-gray-700 flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
+                                <i class="fa-solid fa-table-columns text-indigo-500"></i>
+                                2. 匯出報表包含欄位 (勾選顯示/匯出)
+                            </h4>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                    <input type="checkbox" v-model="reportColumns.date" class="rounded text-indigo-600 mr-1.5">
+                                    搜集日期
+                                </label>
+                                <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                    <input type="checkbox" v-model="reportColumns.source" class="rounded text-indigo-600 mr-1.5">
+                                    搜集來源
+                                </label>
+                                <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                    <input type="checkbox" v-model="reportColumns.desc" class="rounded text-indigo-600 mr-1.5">
+                                    威脅情資說明
+                                </label>
+                                <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                    <input type="checkbox" v-model="reportColumns.impact" class="rounded text-indigo-600 mr-1.5">
+                                    可能之影響
+                                </label>
+                                <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                    <input type="checkbox" v-model="reportColumns.solution" class="rounded text-indigo-600 mr-1.5">
+                                    因應方案
+                                </label>
+                                <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600">
+                                    <input type="checkbox" v-model="reportColumns.note" class="rounded text-indigo-600 mr-1.5">
+                                    備註
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Column 3: 格式與附檔設定 -->
+                        <div class="space-y-2">
+                            <h4 class="font-bold text-gray-700 flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
+                                <i class="fa-solid fa-sliders text-indigo-500"></i>
+                                3. 輸出數量與基準日期
+                            </h4>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-gray-600 font-medium">基準日期：</span>
+                                <input v-model="reportDate" type="text" placeholder="YYYY/MM/DD"
+                                    class="w-32 px-2.5 py-1 font-mono text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                            </div>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-gray-600 font-medium">收錄數量：</span>
                                 <select v-model.number="reportMaxRows" @change="generateReportRows(false)"
-                                    class="px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+                                    class="w-32 px-2.5 py-1 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium">
                                     <option :value="5">精選 5 筆</option>
                                     <option :value="10">標準 10 筆</option>
-                                    <option :value="15">擴充 15 筆</option>
-                                    <option :value="20">深入 20 筆</option>
+                                    <option :value="15">深入 15 筆</option>
+                                    <option :value="20">擴充 20 筆</option>
                                     <option :value="50">全部候選 (至多 50)</option>
                                 </select>
                             </div>
-
-                            <label class="inline-flex items-center cursor-pointer select-none text-gray-700">
-                                <input type="checkbox" v-model="reportCveOnly" @change="generateReportRows(false)" class="rounded text-indigo-600 mr-1.5">
-                                僅收錄具 CVE 編號
+                            <label class="flex items-center cursor-pointer select-none text-gray-700 hover:text-indigo-600 pt-1">
+                                <input type="checkbox" v-model="reportFilters.attachCsv" class="rounded text-indigo-600 mr-2">
+                                派發 Email 時夾帶 CSV 附件
                             </label>
+                        </div>
+                    </div>
 
+                    <!-- Action Buttons Bar -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+                        <div class="flex items-center gap-2">
                             <button @click="generateReportRows(true)" :disabled="isGeneratingReport"
-                                class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer">
+                                class="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm">
                                 <i :class="['fa-solid fa-arrows-rotate', isGeneratingReport ? 'fa-spin' : '']"></i>
-                                重新自原始資料產出
+                                <span>依目前勾選重新產出</span>
+                            </button>
+                            <button @click="saveReportDraft" :disabled="isSavingReportDraft"
+                                class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-floppy-disk text-gray-500"></i>
+                                <span>{{ isSavingReportDraft ? '儲存中...' : '儲存編輯草稿' }}</span>
                             </button>
                         </div>
 
-                        <!-- Export / Dispatch Actions -->
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button @click="saveReportDraft" :disabled="isSavingReportDraft"
-                                class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
-                                <i class="fa-solid fa-floppy-disk text-gray-500"></i>
-                                <span>{{ isSavingReportDraft ? '儲存中...' : '儲存草稿' }}</span>
-                            </button>
+                        <div class="flex items-center gap-2">
                             <button @click="exportReportCsv"
-                                class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
+                                class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
                                 <i class="fa-solid fa-file-csv"></i>
-                                <span>匯出 Excel (.csv)</span>
+                                <span>匯出已選欄位 CSV</span>
                             </button>
                             <button @click="printReportPdf"
-                                class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
+                                class="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
                                 <i class="fa-solid fa-print"></i>
-                                <span>列印 / 另存 PDF</span>
+                                <span>列印 / 另存 PDF (滿版工整)</span>
                             </button>
                             <button @click="openEmailSendModal"
-                                class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
+                                class="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
                                 <i class="fa-solid fa-paper-plane"></i>
                                 <span>派發 Email 報表</span>
                             </button>
@@ -280,82 +341,82 @@
                     </div>
                 </div>
 
-                <!-- Intelligence Table Card -->
-                <div class="glass-panel rounded-2xl p-6 relative">
+                <!-- Intelligence Table Card (Widescreen, No Horizontal Scrollbar) -->
+                <div class="glass-panel rounded-2xl p-6 relative shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-2">
                             <h3 class="text-base font-bold text-gray-800">
-                                {{ reportPeriod === 'month' ? '高危資安威脅情資月報' : '資安威脅情資週報' }} 預覽清單
+                                {{ reportPeriod === 'month' ? '高危資安威脅情資月報' : '資安威脅情資週報' }} 閱覽預覽
                             </h3>
                             <span class="text-xs font-mono bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold border border-indigo-200">
-                                共 {{ reportRows.length }} 則情資
+                                收錄 {{ reportRows.length }} 則情報
                             </span>
                         </div>
                         <p class="text-xs text-gray-400">
-                            💡 點擊任一欄位旁的「<i class="fa-solid fa-pen-to-square text-indigo-500"></i> 編輯」可自訂內容；可直接調整排序或刪除不相關項目。
+                            💡 滿版寬螢幕呈現，無橫向滾輪；點擊「<i class="fa-solid fa-pen-to-square text-indigo-500"></i> 編輯」可自訂各欄內容。
                         </p>
                     </div>
 
                     <!-- Loading State -->
                     <div v-if="isGeneratingReport" class="py-16 text-center text-gray-400">
                         <i class="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500 mb-3"></i>
-                        <p class="text-sm">正在深度解析威脅情報並智慧生成因應方案...</p>
+                        <p class="text-sm">正在依照自訂勾選條件篩選威脅情報並智慧生成...</p>
                     </div>
 
                     <!-- Empty State -->
                     <div v-else-if="reportRows.length === 0" class="py-16 text-center text-gray-400">
                         <i class="fa-solid fa-folder-open text-4xl mb-3 text-gray-300"></i>
-                        <p class="text-sm">目前無符合條件的情資，請點擊上方「重新產出」按鈕。</p>
+                        <p class="text-sm">目前無符合條件的情資，請調整上方勾選條件並點擊「重新產出」。</p>
                     </div>
 
-                    <!-- 6-Column Intelligence Table -->
-                    <div v-else class="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
-                        <table class="w-full text-left text-xs border-collapse">
+                    <!-- Widescreen Fixed Table without Horizontal Scrollbar -->
+                    <div v-else class="w-full border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="table-fixed w-full text-left text-xs border-collapse bg-white">
                             <thead>
-                                <tr class="bg-gray-800 text-white font-semibold">
-                                    <th class="py-3 px-2 text-center w-12">#</th>
-                                    <th class="py-3 px-3 text-center w-24">搜集日期</th>
-                                    <th class="py-3 px-3 text-center w-28">搜集來源</th>
-                                    <th class="py-3 px-4 min-w-[240px]">威脅情資說明</th>
-                                    <th class="py-3 px-4 min-w-[200px]">可能之影響</th>
-                                    <th class="py-3 px-4 min-w-[240px]">因應方案</th>
-                                    <th class="py-3 px-4 min-w-[180px]">備註</th>
-                                    <th class="py-3 px-3 text-center w-24">操作</th>
+                                <tr class="bg-gray-800 text-white font-semibold select-none">
+                                    <th class="py-3 px-2 text-center w-10">#</th>
+                                    <th v-if="reportColumns.date" class="py-3 px-2 text-center w-24">搜集日期</th>
+                                    <th v-if="reportColumns.source" class="py-3 px-2 text-center w-28">搜集來源</th>
+                                    <th v-if="reportColumns.desc" class="py-3 px-3">威脅情資說明</th>
+                                    <th v-if="reportColumns.impact" class="py-3 px-3">可能之影響</th>
+                                    <th v-if="reportColumns.solution" class="py-3 px-3">因應方案</th>
+                                    <th v-if="reportColumns.note" class="py-3 px-3">備註</th>
+                                    <th class="py-3 px-2 text-center w-20">操作</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
+                            <tbody class="divide-y divide-gray-200">
                                 <tr v-for="(row, idx) in reportRows" :key="row.id || idx" class="hover:bg-indigo-50/30 transition-colors">
                                     <td class="py-3 px-2 text-center font-mono text-gray-400 font-bold align-top">
                                         {{ idx + 1 }}
                                     </td>
-                                    <td class="py-3 px-3 text-center font-mono text-gray-600 align-top whitespace-nowrap">
+                                    <td v-if="reportColumns.date" class="py-3 px-2 text-center font-mono text-gray-600 align-top whitespace-nowrap">
                                         {{ row.collectDate }}
                                     </td>
-                                    <td class="py-3 px-3 text-center align-top whitespace-nowrap">
-                                        <span class="inline-block px-2 py-0.5 rounded font-bold text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                    <td v-if="reportColumns.source" class="py-3 px-2 text-center align-top">
+                                        <span class="inline-block px-2 py-0.5 rounded font-bold text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
                                             {{ row.source }}
                                         </span>
                                     </td>
-                                    <td class="py-3 px-4 align-top leading-relaxed text-gray-800">
+                                    <td v-if="reportColumns.desc" class="py-3 px-3 align-top leading-relaxed text-gray-800 break-words">
                                         <div class="font-medium text-gray-900">{{ row.description }}</div>
                                         <div v-if="row.cves && row.cves.length > 0" class="mt-1 flex flex-wrap gap-1">
-                                            <span v-for="c in row.cves" :key="c" class="px-1.5 py-0.2 rounded text-[10px] bg-red-50 text-red-700 font-mono font-bold border border-red-200">
+                                            <span v-for="c in row.cves" :key="c" class="px-1.5 py-0.2 rounded text-[10px] bg-red-50 text-red-700 font-mono font-bold border border-red-200 whitespace-nowrap">
                                                 {{ c }}
                                             </span>
                                         </div>
                                     </td>
-                                    <td class="py-3 px-4 align-top leading-relaxed text-red-900 bg-red-50/20">
+                                    <td v-if="reportColumns.impact" class="py-3 px-3 align-top leading-relaxed text-red-900 bg-red-50/20 break-words">
                                         {{ row.impact }}
                                     </td>
-                                    <td class="py-3 px-4 align-top leading-relaxed text-emerald-900 bg-emerald-50/20">
+                                    <td v-if="reportColumns.solution" class="py-3 px-3 align-top leading-relaxed text-emerald-900 bg-emerald-50/20 break-words">
                                         {{ row.solution }}
                                     </td>
-                                    <td class="py-3 px-4 align-top leading-relaxed text-gray-600">
+                                    <td v-if="reportColumns.note" class="py-3 px-3 align-top leading-relaxed text-gray-600 break-words">
                                         {{ row.note }}
                                     </td>
-                                    <td class="py-3 px-3 text-center align-top space-y-1">
+                                    <td class="py-3 px-2 text-center align-top space-y-1">
                                         <button @click="openRowEditModal(idx)"
-                                            class="w-full px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold border border-indigo-200 flex items-center justify-center gap-1 transition-colors">
+                                            class="w-full px-1.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold border border-indigo-200 flex items-center justify-center gap-1 transition-colors">
                                             <i class="fa-solid fa-pen-to-square"></i> 編輯
                                         </button>
                                         <div class="flex gap-1 justify-center">
@@ -1827,7 +1888,26 @@ all-staff@company.com"
                 const reportPeriod = ref('week'); // 'week' | 'month'
                 const reportDate = ref(new Date().toISOString().slice(0, 10).replace(/-/g, '/'));
                 const reportMaxRows = ref(10);
-                const reportCveOnly = ref(false);
+                
+                // Self-service checkbox columns
+                const reportColumns = ref({
+                    date: true,
+                    source: true,
+                    desc: true,
+                    impact: true,
+                    solution: true,
+                    note: true
+                });
+
+                // Self-service checkbox filters
+                const reportFilters = ref({
+                    cveOnly: false,
+                    highSeverityOnly: false,
+                    deduplicate: true,
+                    excludeDigest: true,
+                    attachCsv: true
+                });
+
                 const reportRows = ref([]);
                 const isGeneratingReport = ref(false);
                 const isSavingReportDraft = ref(false);
@@ -1849,7 +1929,6 @@ all-staff@company.com"
                 const generateReportRows = async (forceFresh = false) => {
                     isGeneratingReport.value = true;
                     try {
-                        // First check draft if not force fresh
                         if (!forceFresh) {
                             const draftRes = await fetch('/api/admin/reports/draft');
                             if (draftRes.ok) {
@@ -1857,17 +1936,21 @@ all-staff@company.com"
                                 if (draftData.draft && draftData.draft.period === reportPeriod.value && Array.isArray(draftData.draft.rows) && draftData.draft.rows.length > 0) {
                                     reportRows.value = draftData.draft.rows;
                                     if (draftData.draft.reportDate) reportDate.value = draftData.draft.reportDate;
+                                    if (draftData.draft.reportColumns) reportColumns.value = { ...reportColumns.value, ...draftData.draft.reportColumns };
+                                    if (draftData.draft.reportFilters) reportFilters.value = { ...reportFilters.value, ...draftData.draft.reportFilters };
                                     isGeneratingReport.value = false;
                                     return;
                                 }
                             }
                         }
 
-                        // Generate fresh
                         const params = new URLSearchParams({
                             period: reportPeriod.value,
                             maxCount: reportMaxRows.value,
-                            cveOnly: reportCveOnly.value
+                            cveOnly: reportFilters.value.cveOnly ? 'true' : 'false',
+                            highSeverityOnly: reportFilters.value.highSeverityOnly ? 'true' : 'false',
+                            deduplicate: reportFilters.value.deduplicate ? 'true' : 'false',
+                            excludeDigest: reportFilters.value.excludeDigest ? 'true' : 'false'
                         });
                         const res = await fetch('/api/admin/reports/generate?' + params.toString());
                         if (res.ok) {
@@ -1891,7 +1974,9 @@ all-staff@company.com"
                         const payload = {
                             period: reportPeriod.value,
                             reportDate: reportDate.value,
-                            rows: reportRows.value
+                            rows: reportRows.value,
+                            reportColumns: reportColumns.value,
+                            reportFilters: reportFilters.value
                         };
                         const res = await fetch('/api/admin/reports/draft', {
                             method: 'POST',
@@ -1899,7 +1984,7 @@ all-staff@company.com"
                             body: JSON.stringify(payload)
                         });
                         if (res.ok) {
-                            alert('報表草稿已成功保存！下次開啟將自動載入您編輯後的版本。');
+                            alert('報表草稿與勾選設定已成功保存！下次開啟將自動載入您設定的內容。');
                         } else {
                             alert('儲存草稿失敗');
                         }
@@ -1968,18 +2053,28 @@ all-staff@company.com"
                         alert('目前無情資資料可供匯出');
                         return;
                     }
-                    const header = '﻿搜集日期,搜集來源,威脅情資說明,可能之影響,因應方案,備註\n';
-                    const clean = (val) => '"' + String(val || '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ') + '"';
-                    const rowsCsv = reportRows.value.map(r => [
-                        clean(r.collectDate),
-                        clean(r.source),
-                        clean(r.description),
-                        clean(r.impact),
-                        clean(r.solution),
-                        clean(r.note)
-                    ].join(',')).join('\n');
+                    const cols = reportColumns.value;
+                    const headers = [];
+                    if (cols.date) headers.push('搜集日期');
+                    if (cols.source) headers.push('搜集來源');
+                    if (cols.desc) headers.push('威脅情資說明');
+                    if (cols.impact) headers.push('可能之影響');
+                    if (cols.solution) headers.push('因應方案');
+                    if (cols.note) headers.push('備註');
 
-                    const blob = new Blob([header + rowsCsv], { type: 'text/csv;charset=utf-8;' });
+                    const clean = (val) => '"' + String(val || '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ') + '"';
+                    const rowsCsv = reportRows.value.map(r => {
+                        const row = [];
+                        if (cols.date) row.push(clean(r.collectDate));
+                        if (cols.source) row.push(clean(r.source));
+                        if (cols.desc) row.push(clean(r.description));
+                        if (cols.impact) row.push(clean(r.impact));
+                        if (cols.solution) row.push(clean(r.solution));
+                        if (cols.note) row.push(clean(r.note));
+                        return row.join(',');
+                    }).join('\n');
+
+                    const blob = new Blob(['\uFEFF' + headers.join(',') + '\n' + rowsCsv], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     const fileNamePrefix = reportPeriod.value === 'month' ? '高危資安威脅情資月報' : '資安威脅情資週報';
@@ -1996,18 +2091,30 @@ all-staff@company.com"
                     }
                     const isMonth = reportPeriod.value === 'month';
                     const reportTitle = isMonth ? '高危資安威脅情資月報' : '資安威脅情資週報';
-                    
+                    const cols = reportColumns.value;
+
                     const printWindow = window.open('', '_blank');
-                    const rowsHtml = reportRows.value.map((r, i) => `
-                        <tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f9fafb'};">
-                            <td style="border: 1px solid #94a3b8; padding: 8px 6px; text-align: center; font-size: 11px; font-family: monospace;">${r.collectDate}</td>
-                            <td style="border: 1px solid #94a3b8; padding: 8px 6px; text-align: center; font-size: 11px; font-weight: bold; color: #312e81;">${r.source}</td>
-                            <td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #0f172a;">${r.description}</td>
-                            <td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #b91c1c;">${r.impact}</td>
-                            <td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #047857;">${r.solution}</td>
-                            <td style="border: 1px solid #94a3b8; padding: 8px 8px; font-size: 11px; line-height: 1.4; color: #334155;">${r.note}</td>
-                        </tr>
-                    `).join('');
+                    
+                    const ths = [];
+                    ths.push('<th style="width: 40px; text-align: center;">#</th>');
+                    if (cols.date) ths.push('<th style="width: 85px; text-align: center;">搜集日期</th>');
+                    if (cols.source) ths.push('<th style="width: 95px; text-align: center;">搜集來源</th>');
+                    if (cols.desc) ths.push('<th>威脅情資說明</th>');
+                    if (cols.impact) ths.push('<th>可能之影響</th>');
+                    if (cols.solution) ths.push('<th>因應方案</th>');
+                    if (cols.note) ths.push('<th>備註</th>');
+
+                    const rowsHtml = reportRows.value.map((r, i) => {
+                        const tds = [];
+                        tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 4px; text-align: center; font-size: 11px; font-family: monospace;">${i + 1}</td>`);
+                        if (cols.date) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 6px; text-align: center; font-size: 11px; font-family: monospace;">${r.collectDate}</td>`);
+                        if (cols.source) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 6px; text-align: center; font-size: 11px; font-weight: bold; color: #312e81;">${r.source}</td>`);
+                        if (cols.desc) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #0f172a; word-break: break-word;">${r.description}</td>`);
+                        if (cols.impact) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #b91c1c; word-break: break-word;">${r.impact}</td>`);
+                        if (cols.solution) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #047857; word-break: break-word;">${r.solution}</td>`);
+                        if (cols.note) tds.push(`<td style="border: 1px solid #94a3b8; padding: 8px 8px; font-size: 11px; line-height: 1.4; color: #334155; word-break: break-word;">${r.note}</td>`);
+                        return `<tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f9fafb'};">${tds.join('')}</tr>`;
+                    }).join('');
 
                     const printDoc = `
                     <!DOCTYPE html>
@@ -2016,12 +2123,12 @@ all-staff@company.com"
                         <meta charset="UTF-8">
                         <title>${reportTitle}_${reportDate.value}</title>
                         <style>
-                            @page { size: A4 landscape; margin: 10mm; }
+                            @page { size: A4 landscape; margin: 8mm; }
                             body { font-family: '微軟正黑體', 'Microsoft JhengHei', sans-serif; margin: 0; padding: 10px; color: #1e293b; }
                             .header { text-align: center; margin-bottom: 12px; border-bottom: 2px solid #1e1b4b; padding-bottom: 8px; }
                             .title { font-size: 20px; font-weight: bold; color: #1e1b4b; letter-spacing: 1px; }
                             .meta { font-size: 12px; color: #475569; margin-top: 4px; display: flex; justify-content: space-between; }
-                            table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+                            table { width: 100%; border-collapse: collapse; table-layout: fixed; word-break: break-word; }
                             th { background-color: #1e1b4b; color: #ffffff; border: 1px solid #0f172a; padding: 8px 6px; font-size: 12px; }
                             tr { page-break-inside: avoid; page-break-after: auto; }
                             .footer { margin-top: 10px; text-align: right; font-size: 10px; color: #64748b; }
@@ -2039,12 +2146,7 @@ all-staff@company.com"
                         <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 80px;">搜集日期</th>
-                                    <th style="width: 90px;">搜集來源</th>
-                                    <th style="width: 250px;">威脅情資說明</th>
-                                    <th style="width: 200px;">可能之影響</th>
-                                    <th style="width: 230px;">因應方案</th>
-                                    <th style="width: 170px;">備註</th>
+                                    ${ths.join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -2066,7 +2168,7 @@ all-staff@company.com"
                     const reportTitle = isMonth ? '高危資安威脅情資月報' : '資安威脅情資週報';
                     emailSendSubject.value = '【資安情報】生活資安觀測站 · ' + reportTitle + ' (' + reportDate.value + ')';
                     emailSendRecipients.value = emailConfig.value.recipients || '';
-                    emailSendAttachCsv.value = true;
+                    emailSendAttachCsv.value = reportFilters.value.attachCsv;
                     showEmailSendModal.value = true;
                 };
 
@@ -2934,6 +3036,8 @@ all-staff@company.com"
                 return {
 
                     reportPeriod,
+                    reportColumns,
+                    reportFilters,
                     reportDate,
                     reportMaxRows,
                     reportCveOnly,

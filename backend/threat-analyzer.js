@@ -300,7 +300,10 @@ export function buildReportRows(posts, options = {}) {
         period = 'week', // 'week' (7天) | 'month' (30天)
         maxCount = 10,
         minScore = 50,
-        cveOnly = false
+        cveOnly = false,
+        highSeverityOnly = false,
+        deduplicate = true,
+        excludeDigest = true
     } = options;
 
     const now = Date.now();
@@ -314,10 +317,16 @@ export function buildReportRows(posts, options = {}) {
     });
 
     // 排除日報整合文與低分項目
-    candidates = candidates.filter(x => !x.meta.isDailyDigest);
+    if (excludeDigest) {
+        candidates = candidates.filter(x => !x.meta.isDailyDigest);
+    }
 
     if (cveOnly) {
         candidates = candidates.filter(x => x.meta.cves.length > 0);
+    }
+
+    if (highSeverityOnly) {
+        candidates = candidates.filter(x => x.meta.score >= 75 || (x.meta.cvss !== null && x.meta.cvss >= 7.0));
     }
 
     // 2. 日期過濾
@@ -339,14 +348,16 @@ export function buildReportRows(posts, options = {}) {
 
     for (const item of pool) {
         const { post, meta } = item;
-        const hasOverlappingCve = meta.cves.length > 0 && meta.cves.some(c => seenCves.has(c));
-        const subjKey = extractSubjectKey(post.title);
-        const hasSameSubject = subjKey && seenSubjects.has(subjKey);
+        if (deduplicate) {
+            const hasOverlappingCve = meta.cves.length > 0 && meta.cves.some(c => seenCves.has(c));
+            const subjKey = extractSubjectKey(post.title);
+            const hasSameSubject = subjKey && seenSubjects.has(subjKey);
 
-        if (hasOverlappingCve || hasSameSubject) continue;
+            if (hasOverlappingCve || hasSameSubject) continue;
 
-        meta.cves.forEach(c => seenCves.add(c));
-        if (subjKey) seenSubjects.add(subjKey);
+            meta.cves.forEach(c => seenCves.add(c));
+            if (subjKey) seenSubjects.add(subjKey);
+        }
 
         const rawContent = (post.content || '').replace(/(\n\n\d{4}-\d{2}-\d{2})+$/, '').trim();
         const sentences = rawContent.split(/[。！？\n]+/).map(s => s.trim()).filter(s => s.length > 6);

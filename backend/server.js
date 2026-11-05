@@ -661,11 +661,21 @@ app.get('/api/admin/reports/generate', requireAuth, (req, res) => {
         const period = req.query.period || 'week'; // 'week' | 'month'
         const maxCount = parseInt(req.query.maxCount) || 10;
         const cveOnly = req.query.cveOnly === 'true';
+        const highSeverityOnly = req.query.highSeverityOnly === 'true';
+        const deduplicate = req.query.deduplicate !== 'false';
+        const excludeDigest = req.query.excludeDigest !== 'false';
         let posts = [];
         if (fs.existsSync(NEWS_PATH)) {
             posts = JSON.parse(fs.readFileSync(NEWS_PATH, 'utf8'));
         }
-        const rows = buildReportRows(posts, { period, maxCount, cveOnly });
+        const rows = buildReportRows(posts, {
+            period,
+            maxCount,
+            cveOnly,
+            highSeverityOnly,
+            deduplicate,
+            excludeDigest
+        });
         res.json({
             success: true,
             period,
