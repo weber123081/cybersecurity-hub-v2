@@ -183,6 +183,186 @@
 
             </div>
 
+            <!-- Email Weekly Auto-Dispatch Tab -->
+            <div v-show="currentTab === 'email'" class="space-y-6">
+                <div class="glass-panel rounded-2xl p-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-3 border-b border-gray-100 pb-4">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                                <i class="fa-solid fa-envelope-open-text mr-2.5 text-indigo-600"></i>每週定時自動寄送資安週報設定
+                            </h2>
+                            <p class="text-xs text-gray-500 mt-1">
+                                系統每週定時自動篩選近 7 天最嚴重高危情報，格式化為標準 6 欄 HTML 郵件表格與 CSV 附件，自動寄送至指定的同仁或主管信箱。
+                            </p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xs font-semibold text-gray-600">每週自動排程發送：</span>
+                            <button @click="emailConfig.enabled = !emailConfig.enabled; saveEmailConfig()"
+                                :class="['relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out', emailConfig.enabled ? 'bg-indigo-600' : 'bg-gray-300']">
+                                <span :class="['pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out', emailConfig.enabled ? 'translate-x-5' : 'translate-x-0']"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Feedback Banner -->
+                    <div v-if="emailMessage.text"
+                        :class="['mb-6 p-3.5 rounded-xl text-sm flex items-center justify-between border', emailMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200']">
+                        <div class="flex items-center">
+                            <i :class="['fa-solid mr-2', emailMessage.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check']"></i>
+                            <span>{{ emailMessage.text }}</span>
+                        </div>
+                        <button @click="emailMessage.text = ''" class="text-gray-400 hover:text-gray-600 ml-4">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <!-- Left Column: Schedule & Recipients -->
+                        <div class="space-y-6">
+                            <!-- Schedule Setting Box -->
+                            <div class="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                                <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                                    <i class="fa-solid fa-clock mr-2 text-indigo-500"></i>定時發送排程時間
+                                </h3>
+                                <div class="grid grid-cols-2 gap-3 mb-2">
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">發送星期</label>
+                                        <select v-model.number="emailConfig.scheduleDay"
+                                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+                                            <option :value="1">每週一 (建議)</option>
+                                            <option :value="2">每週二</option>
+                                            <option :value="3">每週三</option>
+                                            <option :value="4">每週四</option>
+                                            <option :value="5">每週五</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">發送時間</label>
+                                        <select v-model.number="emailConfig.scheduleHour"
+                                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+                                            <option :value="8">早上 08:00</option>
+                                            <option :value="9">早上 09:00 (建議)</option>
+                                            <option :value="10">早上 10:00</option>
+                                            <option :value="14">下午 14:00</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-gray-500 mt-2">
+                                    <i class="fa-solid fa-circle-info mr-1"></i>每當到達指定時段，背景服務將自動彙整近 7 天最嚴重高危威脅情資並寄送。
+                                </p>
+                            </div>
+
+                            <!-- Recipients Box -->
+                            <div class="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                                <h3 class="text-sm font-bold text-gray-700 mb-2 flex items-center">
+                                    <i class="fa-solid fa-users mr-2 text-indigo-500"></i>收件人名單 (Recipients)
+                                </h3>
+                                <p class="text-xs text-gray-500 mb-2">請輸入欲接收週報的同仁、主管或企業群組 Email（多個信箱可用逗號或換行分隔）：</p>
+                                <textarea v-model="emailConfig.recipients" rows="4" placeholder="例：
+security-officer@company.com
+it-manager@company.com
+all-staff@company.com"
+                                    class="w-full px-3 py-2 text-xs font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+
+                                <div class="mt-3">
+                                    <label class="inline-flex items-center text-xs font-medium text-gray-700 cursor-pointer">
+                                        <input type="checkbox" v-model="emailConfig.attachCsv" class="rounded text-indigo-600 mr-2">
+                                        📎 隨信自動附帶 Excel (.csv) 表格檔案
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: SMTP Server Configuration -->
+                        <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-sm font-bold text-gray-700 flex items-center">
+                                    <i class="fa-solid fa-server mr-2 text-indigo-500"></i>SMTP 郵件伺服器連線設定
+                                </h3>
+                                <!-- Quick Templates -->
+                                <div class="flex gap-1.5">
+                                    <button @click="applySmtpPreset('o365')" class="px-2 py-0.5 text-[11px] rounded bg-blue-100 text-blue-700 hover:bg-blue-200">Office 365</button>
+                                    <button @click="applySmtpPreset('gmail')" class="px-2 py-0.5 text-[11px] rounded bg-red-100 text-red-700 hover:bg-red-200">Gmail</button>
+                                    <button @click="applySmtpPreset('relay')" class="px-2 py-0.5 text-[11px] rounded bg-gray-200 text-gray-700 hover:bg-gray-300">內網Relay</button>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="col-span-2">
+                                    <label class="block text-xs text-gray-500 mb-1">SMTP 主機位址 (Host)</label>
+                                    <input v-model="emailConfig.smtpHost" type="text" placeholder="例：smtp.office365.com 或 10.x.x.x"
+                                        class="w-full px-3 py-1.5 text-xs font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">連接埠 (Port)</label>
+                                    <input v-model.number="emailConfig.smtpPort" type="number" placeholder="587 / 25 / 465"
+                                        class="w-full px-3 py-1.5 text-xs font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">帳號 / 寄件信箱 (User)</label>
+                                    <input v-model="emailConfig.smtpUser" type="text" placeholder="例：security@company.com"
+                                        class="w-full px-3 py-1.5 text-xs font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">密碼 / 應用程式密碼 (Pass)</label>
+                                    <input v-model="emailConfig.smtpPass" type="password" placeholder="若內網 Relay 無密碼可留空"
+                                        class="w-full px-3 py-1.5 text-xs font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">寄件者顯示名稱</label>
+                                    <input v-model="emailConfig.senderName" type="text" placeholder="例：生活資安觀測站 · 資安小組"
+                                        class="w-full px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">寄件者 Email (From Address)</label>
+                                    <input v-model="emailConfig.senderEmail" type="text" placeholder="例：security@company.com"
+                                        class="w-full px-3 py-1.5 text-xs font-mono bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                            </div>
+
+                            <div class="pt-2 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+                                <span><i class="fa-solid fa-shield-halved mr-1"></i>支援 SSL / STARTTLS 安全傳輸協議</span>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="emailConfig.smtpSecure" class="rounded text-indigo-600 mr-1.5">
+                                    強制 SSL/TLS (Port 465)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dispatch Status & Action Buttons -->
+                    <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div class="text-xs text-gray-600">
+                            <div><strong>最後寄送紀錄：</strong>
+                                <span v-if="emailConfig.lastSentTime" class="font-mono text-indigo-700">{{ new Date(emailConfig.lastSentTime).toLocaleString('zh-TW') }}</span>
+                                <span v-else class="text-gray-400">尚未執行寄送</span>
+                            </div>
+                            <div v-if="emailConfig.lastSentStatus" class="mt-1 text-gray-500 font-medium">
+                                結果反饋：{{ emailConfig.lastSentStatus }}
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-2 shrink-0">
+                            <button @click="sendTestEmail" :disabled="isSendingTest"
+                                class="px-4 py-2 text-xs font-bold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 rounded-lg shadow-sm transition-all disabled:opacity-50">
+                                <i :class="['fa-solid mr-1', isSendingTest ? 'fa-spinner fa-spin' : 'fa-paper-plane']"></i>
+                                {{ isSendingTest ? '正在寄送測試信...' : '📨 立即發送測試信' }}
+                            </button>
+                            <button @click="saveEmailConfig(true)"
+                                class="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all">
+                                <i class="fa-solid fa-floppy-disk mr-1"></i>儲存郵件設定
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div v-show="currentTab === 'site'" class="space-y-6">
             <!-- Site Announcement Banner Card -->
             <div class="glass-panel rounded-2xl p-6 mt-6">
@@ -1247,6 +1427,102 @@
                     currentTab.value = tabId;
                     localStorage.setItem('cyberhub_admin_tab', tabId);
                 };
+                // Email Weekly Dispatcher State
+                const emailConfig = ref({
+                    enabled: false,
+                    scheduleDay: 1,
+                    scheduleHour: 9,
+                    scheduleMinute: 0,
+                    smtpHost: '',
+                    smtpPort: 587,
+                    smtpSecure: false,
+                    smtpUser: '',
+                    smtpPass: '',
+                    senderName: '生活資安觀測站 · 資安小組',
+                    senderEmail: '',
+                    recipients: '',
+                    attachCsv: true,
+                    lastSentTime: null,
+                    lastSentStatus: null
+                });
+                const emailMessage = ref({ text: '', type: 'success' });
+                const isSendingTest = ref(false);
+
+                const fetchEmailConfig = async () => {
+                    try {
+                        const res = await fetch('/api/admin/email-config');
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.emailConfig) emailConfig.value = { ...emailConfig.value, ...data.emailConfig };
+                        }
+                    } catch (e) {
+                        console.error('Failed to load email config:', e);
+                    }
+                };
+
+                const saveEmailConfig = async (notify = false) => {
+                    try {
+                        const res = await fetch('/api/admin/email-config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(emailConfig.value)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            if (notify) {
+                                emailMessage.value = { text: '已成功儲存每週自動寄送週報設定！', type: 'success' };
+                                setTimeout(() => emailMessage.value.text = '', 4000);
+                            }
+                        }
+                    } catch (e) {
+                        emailMessage.value = { text: '儲存設定失敗', type: 'error' };
+                    }
+                };
+
+                const applySmtpPreset = (preset) => {
+                    if (preset === 'o365') {
+                        emailConfig.value.smtpHost = 'smtp.office365.com';
+                        emailConfig.value.smtpPort = 587;
+                        emailConfig.value.smtpSecure = false;
+                    } else if (preset === 'gmail') {
+                        emailConfig.value.smtpHost = 'smtp.gmail.com';
+                        emailConfig.value.smtpPort = 465;
+                        emailConfig.value.smtpSecure = true;
+                    } else if (preset === 'relay') {
+                        emailConfig.value.smtpHost = '10.2.10.25';
+                        emailConfig.value.smtpPort = 25;
+                        emailConfig.value.smtpSecure = false;
+                        emailConfig.value.smtpUser = '';
+                        emailConfig.value.smtpPass = '';
+                    }
+                };
+
+                const sendTestEmail = async () => {
+                    if (!emailConfig.value.smtpHost || !emailConfig.value.recipients) {
+                        alert('請先填寫 SMTP 伺服器主機與至少一筆收件人信箱');
+                        return;
+                    }
+                    isSendingTest.value = true;
+                    try {
+                        const res = await fetch('/api/admin/email-config/test', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(emailConfig.value)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            emailMessage.value = { text: data.message, type: 'success' };
+                            fetchEmailConfig();
+                        } else {
+                            emailMessage.value = { text: data.message || '測試信發送失敗', type: 'error' };
+                        }
+                    } catch (e) {
+                        emailMessage.value = { text: '發送測試信失敗，請檢查網路或 SMTP 設定', type: 'error' };
+                    } finally {
+                        isSendingTest.value = false;
+                    }
+                };
+
                 const status = ref({
                     isFetching: false,
                     lastFetchTime: null,
@@ -2021,6 +2297,7 @@
 
                 const tabs = computed(() => [
                     { id: 'overview', name: '系統概況與排程', icon: 'fa-gauge-high' },
+                    { id: 'email', name: '每週自動寄週報', icon: 'fa-envelope-open-text' },
                     { id: 'site', name: '宣導橫幅與通報窗口', icon: 'fa-bullhorn' },
                     { id: 'posts', name: '內部公告與文章管理', icon: 'fa-newspaper', badge: posts.value.length },
                     { id: 'dictionary', name: '防護辭典與小提醒', icon: 'fa-book-open', badge: dictionary.value.length },
@@ -2033,6 +2310,7 @@
                     fetchStatus();
                     fetchPosts();
                     fetchSiteConfig();
+                    fetchEmailConfig();
                     fetchDictionary();
                     fetchSources();
                     fetchEmployees();
@@ -2049,6 +2327,13 @@
                     switchTab,
                     tabs,
                     status,
+                    // Weekly Email Dispatcher
+                    emailConfig,
+                    emailMessage,
+                    isSendingTest,
+                    saveEmailConfig,
+                    applySmtpPreset,
+                    sendTestEmail,
                     // Schedule Interval (Item 4)
                     scheduleInterval,
                     updateScheduleInterval,

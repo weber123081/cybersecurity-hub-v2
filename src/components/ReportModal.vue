@@ -19,6 +19,7 @@ const props = defineProps({
 const emit = defineEmits(['close']);
 
 // Filter & Deduplication Controls
+const reportPeriod = ref('week'); // 'week' (近 7 天情資週報) | 'month' (近 30 天情資月報)
 const scope = ref('critical'); // 'critical' | 'twcert' | 'bookmarks'
 const maxRows = ref(10); // 8 | 10 | 15 | 20 | 999
 const reportDate = ref(new Date().toISOString().slice(0, 10).replace(/-/g, '/'));
@@ -320,6 +321,18 @@ function rebuildReportRows() {
     return { post, meta };
   });
 
+  // Filter by period if week mode is selected (last 7 days)
+  if (reportPeriod.value === 'week') {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const weekCandidates = candidates.filter(x => {
+      const d = new Date(x.post.pubDate || x.post.timeAgo || 0);
+      return !isNaN(d.getTime()) && d >= sevenDaysAgo;
+    });
+    if (weekCandidates.length > 0) {
+      candidates = weekCandidates;
+    }
+  }
+
   // Step 2: Filter by selected scope
   if (scope.value === 'critical') {
     candidates = candidates.filter(x => x.meta.score >= 65);
@@ -390,7 +403,7 @@ function rebuildReportRows() {
 }
 
 watch(
-  () => [props.isOpen, props.posts, scope.value, maxRows.value, excludeExportedHistory.value],
+  () => [props.isOpen, props.posts, reportPeriod.value, scope.value, maxRows.value, excludeExportedHistory.value],
   () => {
     if (props.isOpen) {
       rebuildReportRows();
@@ -456,7 +469,7 @@ function buildPrintableHtmlDocument() {
         xmlns="http://www.w3.org/TR/REC-html40">
 <head>
   <meta charset="utf-8">
-  <title>資安威脅情資月報_${reportDate.value}</title>
+  <title>${reportPeriod.value === 'week' ? '資安威脅情資週報' : '高危資安威脅情資月報'}_${reportDate.value}</title>
   <style>
     @page WordSection1 {
       size: 841.9pt 595.3pt; /* A4 Landscape */
@@ -494,7 +507,72 @@ function buildPrintableHtmlDocument() {
       font-weight: bold;
       background-color: #ffffff;
     }
-  </style>
+  
+.period-toggle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px dashed var(--border-color, #e5e7eb);
+}
+
+.period-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary, #1f2937);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.period-btn-group {
+  display: inline-flex;
+  background-color: var(--bg-main, #f3f4f6);
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  gap: 2px;
+}
+
+.period-tab-btn {
+  border: none;
+  background: transparent;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary, #6b7280);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+.period-tab-btn:hover {
+  color: var(--text-primary, #111827);
+}
+
+.period-tab-btn.active {
+  background: linear-gradient(135deg, #ef4444, #ea580c);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+}
+
+.period-status-badge {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+  background: rgba(0, 0, 0, 0.04);
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.dark-theme .period-status-badge {
+  background: rgba(255, 255, 255, 0.08);
+}
+</style>
 </head>
 <body>
   <div class="WordSection1">
@@ -530,7 +608,7 @@ function exportWordDoc() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `資安高危威脅情資月報_${reportDate.value.replace(/\//g, '-')}.doc`;
+  a.download = `${reportPeriod.value === 'week' ? '資安威脅情資週報' : '高危資安威脅情資月報'}_${reportDate.value.replace(/\//g, '-')}.doc`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -556,7 +634,7 @@ function exportExcelCsv() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `資安高危威脅情資月報_${reportDate.value.replace(/\//g, '-')}.csv`;
+  a.download = `${reportPeriod.value === 'week' ? '資安威脅情資週報' : '高危資安威脅情資月報'}_${reportDate.value.replace(/\//g, '-')}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -625,8 +703,8 @@ async function copyTableToClipboard() {
               <i class="fa-solid fa-file-shield"></i>
             </div>
             <div>
-              <h3>資安高危威脅情資月報（自動去重 & 表單匯出）</h3>
-              <p>自動依 CVSS 嚴重度、零時差與 RCE 風險排序，排除跨來源重複報導，一鍵匯出 Word / Excel 標準表單</p>
+              <h3>{{ reportPeriod === 'week' ? '資安威脅情資週報' : '高危資安威脅情資月報' }}（自動去重 & 表單匯出）</h3>
+              <p>依 CVSS 嚴重度、零時差與重大風險智慧排序，自動排除重複報導與日報彙整，一鍵匯出標準 6 欄表單</p>
             </div>
           </div>
           <button class="close-btn" @click="emit('close')">
@@ -638,6 +716,30 @@ async function copyTableToClipboard() {
         <div class="modal-body">
           <!-- Top Control Bar -->
           <div class="config-bar">
+            <!-- Period Selector (Week vs Month) -->
+            <div class="period-toggle-row">
+              <label class="period-label"><i class="fa-solid fa-calendar-check"></i> 報表週期切換：</label>
+              <div class="period-btn-group">
+                <button
+                  :class="['period-tab-btn', reportPeriod === 'week' ? 'active' : '']"
+                  @click="reportPeriod = 'week'"
+                >
+                  <i class="fa-solid fa-calendar-week mr-1"></i>📅 資安情資週報 (近 7 天重點)
+                </button>
+                <button
+                  :class="['period-tab-btn', reportPeriod === 'month' ? 'active' : '']"
+                  @click="reportPeriod = 'month'"
+                >
+                  <i class="fa-solid fa-calendar-days mr-1"></i>🗓️ 高危情資月報 (近 30 天威脅)
+                </button>
+              </div>
+              <span class="period-status-badge" v-if="reportPeriod === 'week'">
+                <i class="fa-solid fa-filter mr-1 text-green-500"></i>已自動鎖定近 7 天發生之最新威脅情資
+              </span>
+              <span class="period-status-badge" v-else>
+                <i class="fa-solid fa-filter mr-1 text-indigo-500"></i>已彙整近 30 天最嚴重高危情報
+              </span>
+            </div>
             <div class="config-row">
               <div class="config-item">
                 <label><i class="fa-solid fa-fire-flame-curved"></i> 抓取條件：</label>

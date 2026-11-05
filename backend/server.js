@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { fetchAndSave, getSources, saveSources, testSourceUrl, generateStableId, requestAbortFetch } from './fetcher.js';
+import { sendWeeklyEmail, generateWeeklyReportEmail } from './mailer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -379,6 +380,41 @@ function restartSchedulerWithInterval(hours) {
     }
 }
 
+let weeklyEmailTask = null;
+function setupWeeklyEmailScheduler() {
+    if (weeklyEmailTask) {
+        weeklyEmailTask.stop();
+        weeklyEmailTask = null;
+    }
+    const cfg = getSiteConfig();
+    const emailCfg = cfg.emailWeeklyReport;
+    if (!emailCfg || !emailCfg.enabled) {
+        console.log('[MAIL-CRON] Weekly email report schedule is disabled.');
+        return;
+    }
+    const day = emailCfg.scheduleDay !== undefined ? emailCfg.scheduleDay : 1;
+    const hour = emailCfg.scheduleHour !== undefined ? emailCfg.scheduleHour : 9;
+    const minute = emailCfg.scheduleMinute !== undefined ? emailCfg.scheduleMinute : 0;
+
+    const cronPattern = `${minute} ${hour} * * ${day}`;
+    console.log(`[MAIL-CRON] Scheduling weekly report email: ${cronPattern} (Day: ${day}, Time: ${hour}:${minute})`);
+
+    weeklyEmailTask = cron.schedule(cronPattern, async () => {
+        console.log('[MAIL-CRON] Triggering scheduled weekly report email dispatch...');
+        try {
+            const res = await sendWeeklyEmail(emailCfg);
+            emailCfg.lastSentTime = new Date().toISOString();
+            emailCfg.lastSentStatus = `成功發送至 ${res.recipientCount} 位收件人 (${res.rowsCount} 則情資)`;
+            saveSiteConfig(cfg);
+        } catch (e) {
+            console.error('[MAIL-CRON] Failed to send scheduled weekly report:', e.message);
+            emailCfg.lastSentTime = new Date().toISOString();
+            emailCfg.lastSentStatus = `發送失敗: ${e.message}`;
+            saveSiteConfig(cfg);
+        }
+    });
+}
+
 async function performFetch() {
     if (isFetching) return { success: false, message: 'Fetch already in progress.' };
     isFetching = true;
@@ -541,6 +577,61 @@ app.delete('/api/admin/dictionary/:id', requireAuth, (req, res) => {
     }
     saveDictionary(filtered);
     res.json({ success: true, dictionary: filtered });
+});
+
+// Weekly Auto-Email Dispatcher Management APIs
+app.get('/api/admin/email-config', requireAuth, (req, res) => {
+    const cfg = getSiteConfig();
+    res.json({ success: true, emailConfig: cfg.emailWeeklyReport || {} });
+});
+
+app.put('/api/admin/email-config', requireAuth, (req, res) => {
+    const cfg = getSiteConfig();
+    cfg.emailWeeklyReport = {
+        ...cfg.emailWeeklyReport,
+        ...req.body
+    };
+    saveSiteConfig(cfg);
+    setupWeeklyEmailScheduler();
+    res.json({ success: true, emailConfig: cfg.emailWeeklyReport });
+});
+
+app.post('/api/admin/email-config/test', requireAuth, async (req, res) => {
+    try {
+        const testOptions = req.body || {};
+        const result = await sendWeeklyEmail(testOptions);
+        res.json({
+            success: true,
+            message: `測試郵件發送成功！已寄出包含 ${result.rowsCount} 則高危情報之週報 (Message ID: ${result.messageId})`,
+            result
+        });
+    } catch (e) {
+        console.error('[API] Test email failed:', e.message);
+        res.status(400).json({
+            success: false,
+            message: `測試郵件寄送失敗：${e.message}`
+        });
+    }
+});
+
+app.post('/api/admin/email-config/send-now', requireAuth, async (req, res) => {
+    const cfg = getSiteConfig();
+    const emailCfg = cfg.emailWeeklyReport;
+    if (!emailCfg || !emailCfg.smtpHost || !emailCfg.recipients) {
+        return res.status(400).json({ success: false, message: '尚未設定 SMTP 伺服器主機或收件人信箱' });
+    }
+    try {
+        const result = await sendWeeklyEmail(emailCfg);
+        emailCfg.lastSentTime = new Date().toISOString();
+        emailCfg.lastSentStatus = `手動立即發送成功 (${result.recipientCount} 位收件人，${result.rowsCount} 則情資)`;
+        saveSiteConfig(cfg);
+        res.json({ success: true, message: '已成功發送週報！', result });
+    } catch (e) {
+        emailCfg.lastSentTime = new Date().toISOString();
+        emailCfg.lastSentStatus = `發送失敗: ${e.message}`;
+        saveSiteConfig(cfg);
+        res.status(400).json({ success: false, message: `發送失敗：${e.message}` });
+    }
 });
 
 // RSS Sources Management API
@@ -879,4 +970,5 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`Unified Frontend + Backend Server: http://localhost:${PORT}/`);
     }
     startScheduler();
+    setupWeeklyEmailScheduler();
 });
