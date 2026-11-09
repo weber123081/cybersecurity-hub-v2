@@ -28,3 +28,5 @@ dist-ssr
 backend/data/*
 !backend/data/sources.json
 !backend/data/site-config.example.json
+
+scratch

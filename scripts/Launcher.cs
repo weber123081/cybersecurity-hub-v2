@@ -72,6 +72,26 @@ class Launcher
         AppDomain.CurrentDomain.ProcessExit += (s, e) => KillNode();
 
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("==================================================================");
+        Console.WriteLine("        生活資安觀測站 · 便攜獨立版 (Portable Edition)");
+        Console.WriteLine("==================================================================");
+        Console.ResetColor();
+
+        // 檢查是否在 Temp 解壓目錄下執行
+        if (baseDir.IndexOf("Temp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            baseDir.IndexOf("Temporary", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("[提醒] 您似乎直接在 ZIP 壓縮檔內執行！");
+            Console.WriteLine("請先將 ZIP 壓縮檔「解壓縮至此資料夾」後，再執行本程式。");
+            Console.ResetColor();
+            Console.WriteLine("\n請按任意鍵結束...");
+            Console.ReadKey();
+            return;
+        }
+
         string nodeExe = Path.Combine(baseDir, "runtime", "node.exe");
         if (!File.Exists(nodeExe))
         {
@@ -82,24 +102,19 @@ class Launcher
         if (!File.Exists(serverScript))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("[錯誤] 找不到後端啟動檔案: " + serverScript);
+            Console.WriteLine("[錯誤] 找不到後端核心檔案: " + serverScript);
             Console.ResetColor();
             Console.WriteLine("請按任意鍵結束...");
             Console.ReadKey();
             return;
         }
 
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("==================================================================");
-        Console.WriteLine("        生活資安觀測站 · 便攜獨立版 (Portable Edition)");
-        Console.WriteLine("==================================================================");
-        Console.ResetColor();
         Console.WriteLine("[狀態] 正在檢查本機連接埠 3000...");
-
         bool alreadyRunning = IsPortOpen("127.0.0.1", 3000);
+
         if (!alreadyRunning)
         {
-            Console.WriteLine("[狀態] 正在啟動內建模組與背景服務...");
+            Console.WriteLine("[狀態] 正在載入內建模組並啟動資安觀測站服務...");
             var psi = new ProcessStartInfo
             {
                 FileName = nodeExe,
@@ -126,7 +141,11 @@ class Launcher
                 nodeProcess.ErrorDataReceived += (s, e) => {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
-                        Console.WriteLine("[伺服器訊息] " + e.Data);
+                        // 忽略 TLS 相關警告，其餘顯示
+                        if (!e.Data.Contains("NODE_TLS_REJECT_UNAUTHORIZED"))
+                        {
+                            Console.WriteLine("[系統訊息] " + e.Data);
+                        }
                     }
                 };
                 nodeProcess.Start();
@@ -138,31 +157,53 @@ class Launcher
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("[啟動失敗] " + ex.Message);
                 Console.ResetColor();
+                Console.WriteLine("\n請按任意鍵結束...");
                 Console.ReadKey();
                 return;
             }
 
-            // 等待伺服器就緒 (最多等待 10 秒)
+            // 等待伺服器就緒 (最多等待 15 秒)
             int attempts = 0;
-            while (!IsPortOpen("127.0.0.1", 3000) && attempts < 20)
+            while (!IsPortOpen("127.0.0.1", 3000) && attempts < 30)
             {
+                if (nodeProcess != null && nodeProcess.HasExited)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("[錯誤] 伺服器進程異常退出 (結束碼: " + nodeProcess.ExitCode + ")");
+                    Console.ResetColor();
+                    Console.WriteLine("建議執行「啟動生活資安觀測站.bat」查看詳細資訊。");
+                    Console.WriteLine("\n請按任意鍵結束...");
+                    Console.ReadKey();
+                    return;
+                }
                 Thread.Sleep(500);
                 attempts++;
+            }
+
+            if (!IsPortOpen("127.0.0.1", 3000))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[逾時] 伺服器啟動超過 15 秒未就緒。");
+                Console.ResetColor();
+                Console.WriteLine("請檢查防火牆或防毒軟體是否阻擋了本機通訊。");
+                Console.WriteLine("\n請按任意鍵結束...");
+                Console.ReadKey();
+                return;
             }
         }
         else
         {
-            Console.WriteLine("[注意] 偵測到本機 3000 埠已在運作中，將直接開啟前端介面。");
+            Console.WriteLine("[注意] 偵測到本機 3000 連接埠已在運作中，將直接開啟網頁介面。");
         }
 
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\n[成功] 生活資安觀測站已成功就緒！");
+        Console.WriteLine("\n[成功] 生活資安觀測站已成功運作中！");
         Console.ResetColor();
         Console.WriteLine("------------------------------------------------------------------");
         Console.WriteLine("  * 公開生活防護前台: http://localhost:3000/");
         Console.WriteLine("  * 資訊中心管理後台: http://localhost:3000/admin.html");
         Console.WriteLine("------------------------------------------------------------------");
-        Console.WriteLine("[提示] 預設瀏覽器即將自動彈出，此視窗縮小即可在背景持續運行。");
+        Console.WriteLine("[提示] 預設瀏覽器即將自動開啟，此視窗縮小即可在背景持續運行。");
         Console.WriteLine("[提示] 欲停止服務，請直接關閉此視窗或按下 Ctrl + C 鍵。");
         Console.WriteLine("==================================================================\n");
 
