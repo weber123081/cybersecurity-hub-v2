@@ -108,12 +108,20 @@ copyDirSync(path.join(ROOT_DIR, 'backend', 'public'), path.join(bundleBackend, '
 // backend/data/
 const bundleBackendData = path.join(bundleBackend, 'data');
 fs.mkdirSync(bundleBackendData, { recursive: true });
-const dataFiles = ['sources.json', 'site-config.json', 'site-config.example.json', 'ai-threat-cache.json'];
+const dataFiles = ['sources.json', 'site-config.json', 'site-config.example.json', 'ai-threat-cache.json', 'stats.json', 'employees.json', 'system_logs.json'];
 for (const f of dataFiles) {
     const src = path.join(ROOT_DIR, 'backend', 'data', f);
     if (fs.existsSync(src)) {
         fs.copyFileSync(src, path.join(bundleBackendData, f));
     }
+}
+
+// backend/data/logs/
+const bundleLogsDir = path.join(bundleBackendData, 'logs');
+fs.mkdirSync(bundleLogsDir, { recursive: true });
+const logFileSrc = path.join(ROOT_DIR, 'backend', 'data', 'logs', 'server_activity.log');
+if (fs.existsSync(logFileSrc)) {
+    fs.copyFileSync(logFileSrc, path.join(bundleLogsDir, 'server_activity.log'));
 }
 
 // backend/node_modules/

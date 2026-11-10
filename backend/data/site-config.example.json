@@ -30,7 +30,10 @@
     "recipients": "team@example.com",
     "attachCsv": false,
     "lastSentTime": null,
-    "lastSentStatus": null
+    "lastSentStatus": null,
+    "customSubject": "【資安情報】生活資安觀測站 · {reportTitle} ({reportDate})",
+    "customIntro": "各位長官與同仁好：\n本報告由生活資安觀測站智慧彙整近期資安威脅情資。已過濾重複項目並依威脅嚴重程度加權排序，提供具備實務參考價值之影響分析、防護因應步驟與處置備註。請資訊與維運同仁依建議因應方案啟動內部資產清查與安全防護作業。",
+    "customFooter": "生活資安觀測站 · 資安情報分析小組 製作 ｜ 本信件為系統自動彙整派發，若有資安疑慮請即刻通報內部資安專線"
   },
   "ai": {
     "enabled": true,

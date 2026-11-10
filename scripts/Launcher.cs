@@ -132,7 +132,7 @@ class Launcher
                 nodeProcess.OutputDataReceived += (s, e) => {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
-                        if (e.Data.Contains("[Gemini AI]") || e.Data.Contains("[CRON]") || e.Data.Contains("[MAIL-CRON]"))
+                        if (e.Data.Contains("[Gemini AI]") || e.Data.Contains("[CRON]") || e.Data.Contains("[MAIL-CRON]") || e.Data.Contains("[ACTIVITY]") || e.Data.Contains("[API]"))
                         {
                             Console.WriteLine(e.Data);
                         }

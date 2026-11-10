@@ -49,18 +49,15 @@ const handleGlobalKeydown = (e) => {
 const visitorCount = ref(0);
 const fetchVisitors = async () => {
   try {
-    const hasHit = sessionStorage.getItem('cyberhub_visitor_hit');
     const simIp = new URLSearchParams(window.location.search).get('simIp') || undefined;
     
-    if (!hasHit || simIp) {
-      await fetch('/api/stats/hit', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ simIp })
-      });
-      sessionStorage.setItem('cyberhub_visitor_hit', 'true');
-    }
+    // Register visitor hit
+    await fetch('/api/stats/hit', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ simIp })
+    });
     
     const res = await fetch('/api/stats/summary', {
       credentials: 'include'

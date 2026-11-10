@@ -614,6 +614,13 @@
                             </div>
 
                             <div>
+                                <label class="block text-xs font-bold text-gray-700 mb-1">自訂開頭引言 / 宣導內文</label>
+                                <textarea v-model="emailSendCustomIntro" rows="3"
+                                    placeholder="留空將使用每週自動寄信設定之內文或標準公版（支援換行）..."
+                                    class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                            </div>
+
+                            <div>
                                 <label class="block text-xs font-bold text-gray-700 mb-1">收件人列表 (每行一個或逗號分隔)</label>
                                 <textarea v-model="emailSendRecipients" rows="4" placeholder="例：cio@company.com
 security-team@company.com"
@@ -791,6 +798,71 @@ all-staff@company.com"
                                     強制 SSL/TLS (Port 465)
                                 </label>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Email Template & Content Card (User Requirement 2) -->
+                    <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-gray-200 pb-3">
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-800 flex items-center">
+                                    <i class="fa-solid fa-pen-nib mr-2 text-indigo-600"></i>自訂自動寄信郵件內文與宣導主旨 (Custom Email Body & Subject)
+                                </h3>
+                                <p class="text-xs text-gray-500 mt-0.5">
+                                    此處填寫的主旨、開頭前言與頁尾資訊將完整套用於每週定時自動發送、立即發送與測試信件中。
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button type="button" @click="openEmailPreview"
+                                    class="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200 rounded-lg transition-all flex items-center shadow-sm">
+                                    <i class="fa-solid fa-eye mr-1.5"></i>👁️ 即時預覽郵件效果
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Custom Subject -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-xs font-semibold text-gray-700">自訂郵件主旨 (Email Subject)</label>
+                                <button type="button" @click="resetEmailSubjectToDefault" class="text-[11px] text-indigo-600 hover:underline">
+                                    ↺ 還原預設主旨
+                                </button>
+                            </div>
+                            <input v-model="emailConfig.customSubject" type="text"
+                                placeholder="例：【資安情報】生活資安觀測站 · {reportTitle} ({reportDate})"
+                                class="w-full px-3 py-2 text-xs font-medium bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <p class="text-[11px] text-gray-500 mt-1">
+                                可用標籤：<code class="bg-gray-200 px-1 py-0.5 rounded text-gray-700">{reportTitle}</code> (報表標題)、<code class="bg-gray-200 px-1 py-0.5 rounded text-gray-700">{reportDate}</code> (彙整日期)。
+                            </p>
+                        </div>
+
+                        <!-- Custom Intro / Body Text -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-xs font-semibold text-gray-700">自訂郵件開頭前言 / 宣導內文 (Email Greeting & Intro Body)</label>
+                                <button type="button" @click="resetEmailIntroToDefault" class="text-[11px] text-indigo-600 hover:underline">
+                                    ↺ 載入標準公版範本
+                                </button>
+                            </div>
+                            <textarea v-model="emailConfig.customIntro" rows="4"
+                                placeholder="請輸入您希望在郵件最上方呈現給主管與同仁的指示、宣導事項或注意事項（支援直接換行分段）..."
+                                class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"></textarea>
+                            <p class="text-[11px] text-gray-500 mt-1">
+                                💡 換行將自動轉為段落間隔；您可以自由填寫當週特別關注之威脅、通報規範或內部要求。
+                            </p>
+                        </div>
+
+                        <!-- Custom Footer -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-xs font-semibold text-gray-700">自訂頁尾簽署與聯絡資訊 (Email Footer)</label>
+                                <button type="button" @click="resetEmailFooterToDefault" class="text-[11px] text-indigo-600 hover:underline">
+                                    ↺ 載入標準頁尾
+                                </button>
+                            </div>
+                            <input v-model="emailConfig.customFooter" type="text"
+                                placeholder="例：生活資安觀測站 · 資安情報分析小組 製作 ｜ 本信件為系統自動彙整派發，若有資安疑慮請即刻通報內部資安專線"
+                                class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
                     </div>
 
@@ -1967,91 +2039,199 @@ all-staff@company.com"
 
             </div>
 
-            <div v-show="currentTab === 'visitors'" class="space-y-6">
-            <!-- Visitor Logs Card -->
-            <div class="glass-panel rounded-2xl p-6 mt-6">
-                <div
-                    class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-                    <h2 class="text-lg font-semibold text-gray-700">
-                        <i class="fa-solid fa-users mr-2 text-indigo-500"></i>訪客紀錄回溯
-                    </h2>
+                        <div v-show="currentTab === 'visitors'" class="space-y-6">
+                <!-- Activity & Audit Logs Card (User Requirement 1) -->
+                <div class="glass-panel rounded-2xl p-6 mt-6">
+                    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                                <i class="fa-solid fa-clipboard-list mr-2.5 text-indigo-600"></i>訪客與系統操作日誌 (Persistent Audit Logs)
+                            </h2>
+                            <p class="text-xs text-gray-500 mt-1">
+                                伺服器重啟不遺失。完整記錄前台訪客進站、文章詳細閱覽、管理員登入/登出認證、自動與手動發信及情資維護。
+                            </p>
+                        </div>
 
-                    <div class="flex flex-wrap items-center gap-3">
-                        <div class="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-                            <span class="text-xs text-gray-500 mr-2">起</span>
-                            <input type="date" v-model="filters.startDate" @change="resetAndFetchLogs"
-                                class="bg-transparent text-sm focus:outline-none text-gray-700">
+                        <!-- Action Toolbar -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button @click="exportLogs"
+                                class="px-3.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all flex items-center shadow-sm cursor-pointer">
+                                <i class="fa-solid fa-file-excel mr-1.5"></i>📥 匯出 CSV 日誌
+                            </button>
+                            <button @click="resetAndFetchLogs"
+                                class="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-all flex items-center shadow-sm cursor-pointer">
+                                <i class="fa-solid fa-rotate mr-1.5"></i>重新整理
+                            </button>
                         </div>
-                        <div class="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-                            <span class="text-xs text-gray-500 mr-2">迄</span>
-                            <input type="date" v-model="filters.endDate" @change="resetAndFetchLogs"
-                                class="bg-transparent text-sm focus:outline-none text-gray-700">
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-5 flex flex-wrap items-center gap-3">
+                        <!-- Type Filter -->
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs font-semibold text-gray-600">事件分類：</label>
+                            <select v-model="filters.type" @change="resetAndFetchLogs"
+                                class="px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-gray-700">
+                                <option value="ALL">🌐 全部事件</option>
+                                <option value="VISIT">👥 前台進站瀏覽 (VISIT)</option>
+                                <option value="ARTICLE_VIEW">📖 情報文章閱覽 (ARTICLE_VIEW)</option>
+                                <option value="LOGIN_SUCCESS">🔑 管理員登入成功 (LOGIN_SUCCESS)</option>
+                                <option value="LOGIN_FAIL">⚠️ 管理員登入失敗 (LOGIN_FAIL)</option>
+                                <option value="LOGOUT">🚪 管理員登出 (LOGOUT)</option>
+                                <option value="EMAIL_SEND">✉️ 郵件寄送 (EMAIL_SEND)</option>
+                                <option value="EMAIL_AUTO">⏰ 定時排程週報 (EMAIL_AUTO)</option>
+                                <option value="POST_MANAGE">📌 公告文章維護 (POST_MANAGE)</option>
+                                <option value="CONFIG_CHANGE">⚙️ 系統設定修改 (CONFIG_CHANGE)</option>
+                                <option value="FETCH_DATA">🔄 情資爬蟲更新 (FETCH_DATA)</option>
+                            </select>
                         </div>
-                        <button @click="resetFilters" class="text-gray-400 hover:text-indigo-600 transition-colors">
-                            <i class="fa-solid fa-rotate-left"></i>
+
+                        <!-- Keyword Search -->
+                        <div class="flex-1 min-w-[200px]">
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                                <input type="text" v-model="filters.keyword" @keyup.enter="resetAndFetchLogs"
+                                    placeholder="搜尋 IP、同仁姓名、事件動作或關鍵字..."
+                                    class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+
+                        <!-- Date Range -->
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center bg-white px-2.5 py-1 rounded-lg border border-gray-300 text-xs">
+                                <span class="text-gray-400 mr-1.5">起</span>
+                                <input type="date" v-model="filters.startDate" @change="resetAndFetchLogs"
+                                    class="bg-transparent text-xs focus:outline-none text-gray-700 font-mono">
+                            </div>
+                            <span class="text-gray-400 text-xs">至</span>
+                            <div class="flex items-center bg-white px-2.5 py-1 rounded-lg border border-gray-300 text-xs">
+                                <span class="text-gray-400 mr-1.5">迄</span>
+                                <input type="date" v-model="filters.endDate" @change="resetAndFetchLogs"
+                                    class="bg-transparent text-xs focus:outline-none text-gray-700 font-mono">
+                            </div>
+                        </div>
+
+                        <!-- Reset Filter Button -->
+                        <button @click="resetFilters"
+                            class="px-2.5 py-1.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-gray-200/60 rounded-lg transition-colors cursor-pointer"
+                            title="重設所有篩選">
+                            <i class="fa-solid fa-rotate-left mr-1"></i>重設
                         </button>
                     </div>
-                </div>
 
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 mb-6">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th
-                                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    時間</th>
-                                <th
-                                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    實名/員工</th>
-                                <th
-                                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    IP 位址</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-100">
-                            <tr v-for="log in visitorLogs" :key="log.timestamp">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                    {{ new Date(log.timestamp).toLocaleString('zh-TW') }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <span :class="log.employeeName === '外部訪客' ? 'text-gray-400' : 'text-green-600'">
-                                        <i
-                                            :class="['fa-solid mr-1', log.employeeName === '外部訪客' ? 'fa-user' : 'fa-user-tie']"></i>
-                                        {{ log.employeeName }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-indigo-600 font-medium">{{
-                                    log.ip }}</td>
-                            </tr>
-                            <tr v-if="visitorLogs.length === 0">
-                                <td colspan="3" class="px-6 py-10 text-center text-sm text-gray-400 italic">
-                                    目前尚未有對應條件的訪客紀錄</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <!-- Logs Table -->
+                    <div class="overflow-x-auto border border-gray-200 rounded-xl">
+                        <table class="min-w-full divide-y divide-gray-200 text-left text-xs">
+                            <thead class="bg-gray-50 text-gray-600 font-semibold">
+                                <tr>
+                                    <th class="px-4 py-3 whitespace-nowrap">記錄時間</th>
+                                    <th class="px-3 py-3 whitespace-nowrap">類型</th>
+                                    <th class="px-4 py-3 whitespace-nowrap">對象 / 識別同仁</th>
+                                    <th class="px-3 py-3 whitespace-nowrap">來源 IP</th>
+                                    <th class="px-4 py-3">事件動作</th>
+                                    <th class="px-4 py-3">詳細說明</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                <tr v-for="log in visitorLogs" :key="log.id || log.timestamp" class="hover:bg-gray-50/70 transition-colors">
+                                    <td class="px-4 py-3 whitespace-nowrap text-gray-500 font-mono text-[11px]">
+                                        {{ new Date(log.timestamp).toLocaleString('zh-TW', { hour12: false }) }}
+                                    </td>
+                                    <td class="px-3 py-3 whitespace-nowrap">
+                                        <span :class="['px-2 py-0.5 rounded text-[11px] font-semibold border', getLogBadgeClass(log.type)]">
+                                            {{ getLogTypeName(log.type) }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-800">
+                                        <span :class="log.employeeName === '外部訪客' ? 'text-gray-400' : 'text-emerald-700 font-bold'">
+                                            <i :class="['fa-solid mr-1', log.employeeName === '外部訪客' ? 'fa-user' : 'fa-user-tie']"></i>
+                                            {{ log.employeeName || (log.user === 'admin' ? '管理員 (admin)' : '外部訪客') }}
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-3 whitespace-nowrap font-mono text-indigo-600 font-semibold">
+                                        {{ log.ip }}
+                                    </td>
+                                    <td class="px-4 py-3 font-medium text-gray-800 max-w-xs truncate" :title="log.action">
+                                        {{ log.action }}
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-500 max-w-sm truncate text-[11px]" :title="log.details">
+                                        {{ log.details || '-' }}
+                                    </td>
+                                </tr>
+                                <tr v-if="visitorLogs.length === 0">
+                                    <td colspan="6" class="px-6 py-12 text-center text-sm text-gray-400 italic">
+                                        <i class="fa-solid fa-inbox text-3xl mb-2 text-gray-300 block"></i>
+                                        目前尚無符合篩選條件的日誌紀錄
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
 
                     <!-- Pagination -->
-                    <div class="flex items-center justify-between border-t border-gray-100 pt-4">
-                        <div class="text-sm text-gray-500">
-                            顯示第 {{ startIndex + 1 }} 至 {{ Math.min(startIndex + 10, pagination.totalCount) }} 筆 (共 {{
-                            pagination.totalCount }} 筆)
+                    <div class="flex flex-col sm:flex-row items-center justify-between border-t border-gray-100 pt-4 gap-3 mt-4 text-xs">
+                        <div class="text-gray-500">
+                            顯示第 {{ pagination.totalCount > 0 ? startIndex + 1 : 0 }} 至 {{ Math.min(startIndex + 15, pagination.totalCount) }} 筆 (共 {{ pagination.totalCount }} 筆日誌)
                         </div>
-                        <div class="flex space-x-2">
+                        <div class="flex items-center space-x-2">
                             <button @click="changePage(-1)" :disabled="pagination.currentPage <= 1"
-                                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-30">
+                                class="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
                                 上一頁
                             </button>
-                            <div class="flex items-center px-4 text-sm font-bold text-indigo-600">
-                                {{ pagination.currentPage }} / {{ pagination.totalPages || 1 }}
-                            </div>
+                            <span class="px-2 font-mono text-gray-700">第 {{ pagination.currentPage }} / {{ pagination.totalPages }} 頁</span>
                             <button @click="changePage(1)" :disabled="pagination.currentPage >= pagination.totalPages"
-                                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-30">
+                                class="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
                                 下一頁
                             </button>
                         </div>
                     </div>
+
+                    <!-- Persistence Note -->
+                    <div class="mt-4 p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-[11px] text-blue-800 flex items-start gap-2">
+                        <i class="fa-solid fa-database mt-0.5 text-blue-500"></i>
+                        <div>
+                            <strong>日誌持久化存檔保障：</strong>
+                            系統所有活動日誌均雙軌自動儲存於本機硬碟 <code>backend/data/system_logs.json</code> 及純文字紀錄檔 <code>backend/data/logs/server_activity.log</code>，伺服器重啟或關機後歷史日誌一律完整保留。
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <!-- Email Live Preview Modal -->
+            <div v-if="showEmailPreviewModal" class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-gray-100">
+                    <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-envelope-open-text text-indigo-600 text-lg"></i>
+                            <h3 class="font-bold text-gray-800 text-sm">自訂郵件效果即時預覽 (Email Live Preview)</h3>
+                        </div>
+                        <button @click="showEmailPreviewModal = false" class="text-gray-400 hover:text-gray-600 p-1 cursor-pointer">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+
+                    <div class="px-5 py-3 bg-indigo-50/60 border-b border-indigo-100 text-xs">
+                        <span class="font-semibold text-gray-600">預計發送主旨：</span>
+                        <span class="font-bold text-indigo-900 ml-1 font-mono">{{ emailPreviewSubject }}</span>
+                    </div>
+
+                    <div class="p-6 overflow-y-auto flex-1 bg-gray-100">
+                        <div v-if="isLoadingEmailPreview" class="py-16 text-center text-gray-500">
+                            <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600 mb-2"></i>
+                            <p class="text-xs">正在渲染自訂郵件內容預覽...</p>
+                        </div>
+                        <div v-else class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" v-html="emailPreviewHtml">
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+                        <button @click="showEmailPreviewModal = false" class="px-5 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            關閉預覽
+                        </button>
+                    </div>
+                </div>
+            </div>
+</div>
 
         </div>
             </div>
@@ -2083,9 +2263,55 @@ all-staff@company.com"
                     senderEmail: '',
                     recipients: '',
                     attachCsv: true,
+                    customSubject: '【資安情報】生活資安觀測站 · {reportTitle} ({reportDate})',
+                    customIntro: '各位長官與同仁好：\n本報告由生活資安觀測站智慧彙整近期資安威脅情資。已過濾重複項目並依威脅嚴重程度加權排序，提供具備實務參考價值之影響分析、防護因應步驟與處置備註。請資訊與維運同仁依建議因應方案啟動內部資產清查與安全防護作業。',
+                    customFooter: '生活資安觀測站 · 資安情報分析小組 製作 ｜ 本信件為系統自動彙整派發，若有資安疑慮請即刻通報內部資安專線',
                     lastSentTime: null,
                     lastSentStatus: null
                 });
+
+                const resetEmailSubjectToDefault = () => {
+                    emailConfig.value.customSubject = '【資安情報】生活資安觀測站 · {reportTitle} ({reportDate})';
+                };
+                const resetEmailIntroToDefault = () => {
+                    emailConfig.value.customIntro = '各位長官與同仁好：\n本報告由生活資安觀測站智慧彙整近期資安威脅情資。已過濾重複項目並依威脅嚴重程度加權排序，提供具備實務參考價值之影響分析、防護因應步驟與處置備註。請資訊與維運同仁依建議因應方案啟動內部資產清查與安全防護作業。';
+                };
+                const resetEmailFooterToDefault = () => {
+                    emailConfig.value.customFooter = '生活資安觀測站 · 資安情報分析小組 製作 ｜ 本信件為系統自動彙整派發，若有資安疑慮請即刻通報內部資安專線';
+                };
+
+                const showEmailPreviewModal = ref(false);
+                const emailPreviewHtml = ref('');
+                const emailPreviewSubject = ref('');
+                const isLoadingEmailPreview = ref(false);
+
+                const openEmailPreview = async () => {
+                    isLoadingEmailPreview.value = true;
+                    showEmailPreviewModal.value = true;
+                    try {
+                        const res = await fetch('/api/admin/email-config/preview', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                customSubject: emailConfig.value.customSubject,
+                                customIntro: emailConfig.value.customIntro,
+                                customFooter: emailConfig.value.customFooter,
+                                period: 'week'
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            emailPreviewHtml.value = data.html;
+                            emailPreviewSubject.value = data.subject;
+                        } else {
+                            alert('產生郵件預覽失敗: ' + (data.message || '未知錯誤'));
+                        }
+                    } catch (e) {
+                        alert('預覽連線失敗: ' + e.message);
+                    } finally {
+                        isLoadingEmailPreview.value = false;
+                    }
+                };
                 const emailMessage = ref({ text: '', type: 'success' });
                 const isSendingTest = ref(false);
 
@@ -2329,6 +2555,7 @@ all-staff@company.com"
 
                 const showEmailSendModal = ref(false);
                 const emailSendSubject = ref('');
+                const emailSendCustomIntro = ref('');
                 const emailSendRecipients = ref('');
                 const emailSendAttachCsv = ref(true);
 
@@ -2601,6 +2828,7 @@ all-staff@company.com"
                             rows: reportRows.value,
                             recipients: emailSendRecipients.value,
                             subject: emailSendSubject.value,
+                            customIntro: emailSendCustomIntro.value,
                             attachCsv: emailSendAttachCsv.value
                         };
                         const res = await fetch('/api/admin/reports/send-email', {
@@ -3069,7 +3297,8 @@ all-staff@company.com"
                 };
 
                 const getArticleCrowd = (post) => {
-                    if (!post) return { crowd: '一般大眾', crowdDesc: '全體網路使用者', summary: '', tips: [] };
+                    if (!post) return {
+ crowd: '一般大眾', crowdDesc: '全體網路使用者', summary: '', tips: [] };
                     const full = ((post.title || '') + ' ' + (post.content || '')).toLowerCase();
                     
                     let crowd = '🌐 全體網路用戶';
@@ -3262,8 +3491,47 @@ all-staff@company.com"
                 });
                 const filters = ref({
                     startDate: '',
-                    endDate: ''
+                    endDate: '',
+                    type: 'ALL',
+                    keyword: ''
                 });
+
+                const getLogBadgeClass = (type) => {
+                    switch (type) {
+                        case 'LOGIN_SUCCESS': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                        case 'LOGIN_FAIL': return 'bg-rose-100 text-rose-800 border-rose-200';
+                        case 'LOGOUT': return 'bg-gray-100 text-gray-700 border-gray-200';
+                        case 'VISIT': return 'bg-blue-100 text-blue-800 border-blue-200';
+                        case 'ARTICLE_VIEW': return 'bg-sky-100 text-sky-800 border-sky-200';
+                        case 'EMAIL_SEND':
+                        case 'EMAIL_AUTO':
+                        case 'EMAIL_TEST': return 'bg-purple-100 text-purple-800 border-purple-200';
+                        case 'POST_MANAGE': return 'bg-amber-100 text-amber-800 border-amber-200';
+                        case 'CONFIG_CHANGE': return 'bg-orange-100 text-orange-800 border-orange-200';
+                        default: return 'bg-gray-100 text-gray-700 border-gray-200';
+                    }
+                };
+
+                const getLogTypeName = (type) => {
+                    switch (type) {
+                        case 'LOGIN_SUCCESS': return '登入成功';
+                        case 'LOGIN_FAIL': return '登入失敗';
+                        case 'LOGOUT': return '管理員登出';
+                        case 'VISIT': return '進站瀏覽';
+                        case 'ARTICLE_VIEW': return '閱覽情報';
+                        case 'EMAIL_SEND': return '週報寄送';
+                        case 'EMAIL_AUTO': return '定時排程週報';
+                        case 'EMAIL_TEST': return '測試郵件';
+                        case 'POST_MANAGE': return '公告文章管理';
+                        case 'CONFIG_CHANGE': return '系統設定變更';
+                        case 'FETCH_DATA': return '情資更新';
+                        default: return type || '一般活動';
+                    }
+                };
+
+                const exportLogs = () => {
+                    window.open('/api/admin/logs/export', '_blank');
+                };
                 const startIndex = ref(0);
                 const isLoading = ref(false);
                 let pollInterval = null;
@@ -3420,7 +3688,9 @@ all-staff@company.com"
 
                 const fetchLogs = async () => {
                     try {
-                        let url = `/api/admin/visitors?page=${pagination.value.currentPage}&limit=10`;
+                        let url = `/api/admin/logs?page=${pagination.value.currentPage}&limit=15`;
+                        if (filters.value.type && filters.value.type !== 'ALL') url += `&type=${encodeURIComponent(filters.value.type)}`;
+                        if (filters.value.keyword && filters.value.keyword.trim()) url += `&keyword=${encodeURIComponent(filters.value.keyword.trim())}`;
                         if (filters.value.startDate) url += `&startDate=${filters.value.startDate}`;
                         if (filters.value.endDate) url += `&endDate=${filters.value.endDate}`;
 
@@ -3432,7 +3702,7 @@ all-staff@company.com"
                         pagination.value.totalPages = data.totalPages || 1;
                         pagination.value.currentPage = data.currentPage || 1;
 
-                        startIndex.value = (pagination.value.currentPage - 1) * 10;
+                        startIndex.value = (pagination.value.currentPage - 1) * 15;
                     } catch (e) {
                         console.error("Error fetching logs:", e);
                     }
@@ -3446,6 +3716,8 @@ all-staff@company.com"
                 const resetFilters = () => {
                     filters.value.startDate = '';
                     filters.value.endDate = '';
+                    filters.value.type = 'ALL';
+                    filters.value.keyword = '';
                     resetAndFetchLogs();
                 };
 
@@ -3520,7 +3792,7 @@ all-staff@company.com"
                     { id: 'dictionary', name: '防護辭典與小提醒', icon: 'fa-book-open', badge: dictionary.value.length },
                     { id: 'sources', name: '爬蟲來源管理', icon: 'fa-rss', badge: sources.value.length },
                     { id: 'employees', name: '員工 IP 實名對照', icon: 'fa-address-card', badge: employees.value.length },
-                    { id: 'visitors', name: '訪客紀錄回溯', icon: 'fa-users', badge: pagination.value.totalCount }
+                    { id: 'visitors', name: '訪客與系統操作日誌', icon: 'fa-clipboard-list', badge: pagination.value.totalCount }
                 ]);
 
                 onMounted(() => {
@@ -3541,6 +3813,20 @@ all-staff@company.com"
                 });
 
                 return {
+                    // User Req 1 & 2 Additions
+                    resetEmailSubjectToDefault,
+                    resetEmailIntroToDefault,
+                    resetEmailFooterToDefault,
+                    showEmailPreviewModal,
+                    emailPreviewHtml,
+                    emailPreviewSubject,
+                    isLoadingEmailPreview,
+                    openEmailPreview,
+                    emailSendCustomIntro,
+                    exportLogs,
+                    getLogBadgeClass,
+                    getLogTypeName,
+
 
                     reportPeriod,
                     reportColumns,

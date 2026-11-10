@@ -31,6 +31,9 @@ app.use(session({
 }));
 
 const STATS_PATH = path.join(__dirname, 'data/stats.json');
+const SYSTEM_LOGS_PATH = path.join(__dirname, 'data/system_logs.json');
+const LOGS_DIR = path.join(__dirname, 'data/logs');
+const ACTIVITY_LOG_FILE = path.join(LOGS_DIR, 'server_activity.log');
 const EMPLOYEES_PATH = path.join(__dirname, 'data/employees.json');
 const NEWS_PATH = path.join(__dirname, '../public/data/news.json');
 const SITE_CONFIG_PATH = path.join(__dirname, 'data/site-config.json');
@@ -49,6 +52,26 @@ const DEFAULT_SITE_CONFIG = {
     ],
     schedule: {
         intervalHours: 6
+    },
+    emailWeeklyReport: {
+        enabled: false,
+        scheduleDay: 1,
+        scheduleHour: 9,
+        scheduleMinute: 0,
+        smtpHost: "",
+        smtpPort: 587,
+        smtpSecure: false,
+        smtpUser: "",
+        smtpPass: "",
+        senderName: "生活資安觀測站 · 資安小組",
+        senderEmail: "",
+        recipients: "",
+        attachCsv: true,
+        customSubject: "【資安情報】生活資安觀測站 · {reportTitle} ({reportDate})",
+        customIntro: "各位長官與同仁好：\n本報告由生活資安觀測站智慧彙整近期資安威脅情資。已過濾重複項目並依威脅嚴重程度加權排序，提供具備實務參考價值之影響分析、防護因應步驟與處置備註。請資訊與維運同仁依建議因應方案啟動內部資產清查與安全防護作業。",
+        customFooter: "生活資安觀測站 · 資安情報分析小組 製作 ｜ 本信件為系統自動彙整派發，若有資安疑慮請即刻通報內部資安專線",
+        lastSentTime: null,
+        lastSentStatus: null
     },
     ai: {
         enabled: true,
@@ -256,7 +279,13 @@ function matchEmployee(ip) {
     return found ? found.name : null;
 }
 
-// Stats Helper Functions
+// Stats & Persistent Logging Helper Functions
+function ensureLogsDir() {
+    if (!fs.existsSync(LOGS_DIR)) {
+        fs.mkdirSync(LOGS_DIR, { recursive: true });
+    }
+}
+
 function getStats() {
     try {
         if (!fs.existsSync(STATS_PATH)) {
@@ -282,14 +311,113 @@ function saveStats(stats) {
     }
 }
 
+function getSystemLogs() {
+    try {
+        if (!fs.existsSync(SYSTEM_LOGS_PATH)) {
+            const dir = path.dirname(SYSTEM_LOGS_PATH);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(SYSTEM_LOGS_PATH, JSON.stringify([], null, 2), 'utf8');
+            return [];
+        }
+        return JSON.parse(fs.readFileSync(SYSTEM_LOGS_PATH, 'utf8'));
+    } catch (e) {
+        console.error('getSystemLogs error:', e);
+        return [];
+    }
+}
+
+function saveSystemLogs(logs) {
+    try {
+        const dir = path.dirname(SYSTEM_LOGS_PATH);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const trimmed = Array.isArray(logs) ? logs.slice(0, 2000) : [];
+        fs.writeFileSync(SYSTEM_LOGS_PATH, JSON.stringify(trimmed, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Failed to save system logs:', e);
+    }
+}
+
+function appendActivityFileLog(entry) {
+    try {
+        ensureLogsDir();
+        const dateStr = new Date(entry.timestamp).toLocaleString('zh-TW', { hour12: false });
+        const line = `[${dateStr}] [${entry.type}] IP: ${entry.ip || 'unknown'}${entry.employeeName ? ` (${entry.employeeName})` : ''} | User: ${entry.user || '-'} | ${entry.action || ''}${entry.details ? ` | ${entry.details}` : ''}\n`;
+        fs.appendFileSync(ACTIVITY_LOG_FILE, line, 'utf8');
+    } catch (e) {
+        console.error('appendActivityFileLog error:', e);
+    }
+}
+
+function recordActivity({
+    type = 'SYSTEM',
+    category = '系統運作',
+    user = '-',
+    ip = '127.0.0.1',
+    employeeName = null,
+    action = '',
+    details = '',
+    status = 'success'
+}) {
+    try {
+        let cleanIp = ip;
+        if (typeof cleanIp === 'string') {
+            if (cleanIp.includes(',')) cleanIp = cleanIp.split(',')[0].trim();
+            if (cleanIp.startsWith('::ffff:')) cleanIp = cleanIp.substring(7);
+            if (cleanIp === '::1') cleanIp = '127.0.0.1';
+        }
+
+        const empName = employeeName || matchEmployee(cleanIp) || (cleanIp === '127.0.0.1' ? '測試管理員 (本機)' : '外部訪客');
+        const now = new Date();
+        const entry = {
+            id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            timestamp: now.toISOString(),
+            type,
+            category,
+            user,
+            ip: cleanIp,
+            employeeName: empName,
+            action,
+            details,
+            status
+        };
+
+        // 1. Append to flat log file (survives restarts)
+        appendActivityFileLog(entry);
+
+        // 2. Prepend to persistent JSON logs
+        const logs = getSystemLogs();
+        logs.unshift(entry);
+        saveSystemLogs(logs);
+
+        // 3. Print clean log to console
+        console.log(`[ACTIVITY][${type}] ${cleanIp} (${empName}): ${action}`);
+
+        return entry;
+    } catch (e) {
+        console.error('recordActivity error:', e);
+    }
+}
+
 function refreshVisitorLogNames() {
     const stats = getStats();
     if (Array.isArray(stats.logs)) {
         stats.logs = stats.logs.map(log => ({
             ...log,
-            employeeName: matchEmployee(log.ip) || '外部訪客'
+            employeeName: matchEmployee(log.ip) || (log.ip === '127.0.0.1' ? '測試管理員 (本機)' : '外部訪客')
         }));
         saveStats(stats);
+    }
+    const sysLogs = getSystemLogs();
+    if (Array.isArray(sysLogs)) {
+        let changed = false;
+        sysLogs.forEach(log => {
+            const matched = matchEmployee(log.ip);
+            if (matched && matched !== log.employeeName) {
+                log.employeeName = matched;
+                changed = true;
+            }
+        });
+        if (changed) saveSystemLogs(sysLogs);
     }
 }
 
@@ -414,11 +542,27 @@ function setupWeeklyEmailScheduler() {
             emailCfg.lastSentTime = new Date().toISOString();
             emailCfg.lastSentStatus = `成功發送至 ${res.recipientCount} 位收件人 (${res.rowsCount} 則情資)`;
             saveSiteConfig(cfg);
+            recordActivity({
+                type: 'EMAIL_AUTO',
+                category: '郵件派發',
+                user: '系統自動排程',
+                action: '定時自動發送週報郵件成功',
+                details: `成功寄送至 ${res.recipientCount} 位收件人 (${res.rowsCount} 則情資)`,
+                status: 'success'
+            });
         } catch (e) {
             console.error('[MAIL-CRON] Failed to send scheduled weekly report:', e.message);
             emailCfg.lastSentTime = new Date().toISOString();
             emailCfg.lastSentStatus = `發送失敗: ${e.message}`;
             saveSiteConfig(cfg);
+            recordActivity({
+                type: 'EMAIL_AUTO',
+                category: '郵件派發',
+                user: '系統自動排程',
+                action: '定時自動發送週報郵件失敗',
+                details: e.message,
+                status: 'error'
+            });
         }
     });
 }
@@ -429,9 +573,25 @@ async function performFetch() {
     try {
         await fetchAndSave();
         lastFetchTime = new Date().toISOString();
+        recordActivity({
+            type: 'FETCH_DATA',
+            category: '系統維護',
+            user: '情資搜集引擎',
+            action: '完成資安情報抓取與更新',
+            details: `最新情資總數: ${getPosts().length} 則`,
+            status: 'success'
+        });
         return { success: true };
     } catch (error) {
         console.error('Fetch failed:', error);
+        recordActivity({
+            type: 'FETCH_DATA',
+            category: '系統維護',
+            user: '情資搜集引擎',
+            action: '情報抓取失敗',
+            details: error.message,
+            status: 'error'
+        });
         return { success: false, error: error.message };
     } finally {
         isFetching = false;
@@ -440,18 +600,47 @@ async function performFetch() {
 
 // 4. API Routes
 app.post('/api/login', (req, res) => {
-    console.log(`[API] Login attempt: ${req.body.username}`);
     const { username, password } = req.body;
+    const clientIp = req.body.simIp || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    console.log(`[API] Login attempt: ${username} from ${clientIp}`);
     if (username === ADMIN_USER && password === ADMIN_PASS) {
         req.session.loggedIn = true;
+        recordActivity({
+            type: 'LOGIN_SUCCESS',
+            category: '認證登入',
+            user: username,
+            ip: clientIp,
+            action: '管理員登入成功',
+            details: '成功驗證進入管理員控制台',
+            status: 'success'
+        });
         req.session.save(() => res.json({ success: true }));
     } else {
+        recordActivity({
+            type: 'LOGIN_FAIL',
+            category: '認證登入',
+            user: username || '(未提供)',
+            ip: clientIp,
+            action: '管理員登入失敗',
+            details: '帳號或密碼輸入錯誤',
+            status: 'error'
+        });
         res.status(401).json({ success: false, message: '帳號或密碼錯誤' });
     }
 });
 
 app.post('/api/logout', (req, res) => {
-    console.log(`[API] Logout`);
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    console.log(`[API] Logout from ${clientIp}`);
+    recordActivity({
+        type: 'LOGOUT',
+        category: '認證登入',
+        user: ADMIN_USER,
+        ip: clientIp,
+        action: '管理員登出',
+        details: '已主動登出後台管理系統',
+        status: 'info'
+    });
     req.session.destroy(() => {
         res.clearCookie('connect.sid');
         res.json({ success: true });
@@ -601,7 +790,32 @@ app.put('/api/admin/email-config', requireAuth, (req, res) => {
     };
     saveSiteConfig(cfg);
     setupWeeklyEmailScheduler();
+    recordActivity({
+        type: 'CONFIG_CHANGE',
+        category: '系統設定',
+        user: ADMIN_USER,
+        ip: req.socket.remoteAddress,
+        action: '修改每週自動寄送週報設定',
+        details: `排程: 星期${cfg.emailWeeklyReport.scheduleDay} ${cfg.emailWeeklyReport.scheduleHour}:00 | 啟用: ${cfg.emailWeeklyReport.enabled ? '是' : '否'} | 收件人數: ${String(cfg.emailWeeklyReport.recipients || '').split(/[,;\n]+/).filter(Boolean).length}`,
+        status: 'success'
+    });
     res.json({ success: true, emailConfig: cfg.emailWeeklyReport });
+});
+
+app.post('/api/admin/email-config/preview', requireAuth, (req, res) => {
+    try {
+        const { customSubject, customIntro, customFooter, period = 'week' } = req.body || {};
+        const posts = getPosts();
+        const report = generateWeeklyReportEmail(posts, {
+            period,
+            customSubject,
+            customIntro,
+            customFooter
+        });
+        res.json({ success: true, subject: report.subject, html: report.html, rowsCount: report.rows.length });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
 });
 
 function formatSmtpErrorMessage(err) {
@@ -623,6 +837,15 @@ app.post('/api/admin/email-config/test', requireAuth, async (req, res) => {
         const testOptions = req.body || {};
         console.log(`[API] Testing email dispatch to: ${testOptions.recipients} via ${testOptions.smtpHost}:${testOptions.smtpPort}`);
         const result = await sendWeeklyEmail(testOptions);
+        recordActivity({
+            type: 'EMAIL_TEST',
+            category: '郵件派發',
+            user: ADMIN_USER,
+            ip: req.socket.remoteAddress,
+            action: '測試郵件發送成功',
+            details: `寄至: ${testOptions.recipients} | 情資數: ${result.rowsCount} | Message ID: ${result.messageId}`,
+            status: 'success'
+        });
         res.json({
             success: true,
             message: `測試郵件發送成功！已寄出包含 ${result.rowsCount} 則高危情報之週報 (Message ID: ${result.messageId})`,
@@ -630,6 +853,15 @@ app.post('/api/admin/email-config/test', requireAuth, async (req, res) => {
         });
     } catch (e) {
         console.error('[API] Test email failed:', e.message);
+        recordActivity({
+            type: 'EMAIL_TEST',
+            category: '郵件派發',
+            user: ADMIN_USER,
+            ip: req.socket.remoteAddress,
+            action: '測試郵件發送失敗',
+            details: e.message,
+            status: 'error'
+        });
         res.status(400).json({
             success: false,
             message: '測試郵件寄送失敗：' + formatSmtpErrorMessage(e)
@@ -648,12 +880,30 @@ app.post('/api/admin/email-config/send-now', requireAuth, async (req, res) => {
         emailCfg.lastSentTime = new Date().toISOString();
         emailCfg.lastSentStatus = `手動立即發送成功 (${result.recipientCount} 位收件人，${result.rowsCount} 則情資)`;
         saveSiteConfig(cfg);
+        recordActivity({
+            type: 'EMAIL_SEND',
+            category: '郵件派發',
+            user: ADMIN_USER,
+            ip: req.socket.remoteAddress,
+            action: '手動立即發送週報郵件成功',
+            details: `成功寄送至 ${result.recipientCount} 位收件人 (${result.rowsCount} 則情資)`,
+            status: 'success'
+        });
         res.json({ success: true, message: '已成功發送週報！', result });
     } catch (e) {
         const friendlyMsg = formatSmtpErrorMessage(e);
         emailCfg.lastSentTime = new Date().toISOString();
         emailCfg.lastSentStatus = `發送失敗: ${e.message}`;
         saveSiteConfig(cfg);
+        recordActivity({
+            type: 'EMAIL_SEND',
+            category: '郵件派發',
+            user: ADMIN_USER,
+            ip: req.socket.remoteAddress,
+            action: '手動立即發送週報郵件失敗',
+            details: e.message,
+            status: 'error'
+        });
         res.status(400).json({ success: false, message: '發送失敗：' + friendlyMsg });
     }
 });
@@ -846,7 +1096,7 @@ app.post('/api/admin/reports/draft', requireAuth, (req, res) => {
 });
 
 app.post('/api/admin/reports/send-email', requireAuth, async (req, res) => {
-    const { period, reportDate, rows, recipients, subject, attachCsv } = req.body || {};
+    const { period, reportDate, rows, recipients, subject, attachCsv, customSubject, customIntro, customFooter } = req.body || {};
     const cfg = getSiteConfig();
     const emailCfg = cfg.emailWeeklyReport || {};
     if (!emailCfg.smtpHost) {
@@ -859,7 +1109,7 @@ app.post('/api/admin/reports/send-email', requireAuth, async (req, res) => {
     try {
         const isMonth = period === 'month';
         const reportTitle = isMonth ? '高危資安威脅情資月報' : '資安威脅情資週報';
-        const finalSubject = subject || `【資安情報】生活資安觀測站 · ${reportTitle} (${reportDate || new Date().toISOString().slice(0, 10)})`;
+        const finalSubject = subject || customSubject || emailCfg.customSubject || `【資安情報】生活資安觀測站 · ${reportTitle} (${reportDate || new Date().toISOString().slice(0, 10)})`;
         
         const result = await sendWeeklyEmail({
             ...emailCfg,
@@ -868,10 +1118,32 @@ app.post('/api/admin/reports/send-email', requireAuth, async (req, res) => {
             reportDate: reportDate,
             customRows: rows,
             attachCsv: attachCsv !== undefined ? attachCsv : true,
-            subject: finalSubject
+            customSubject: finalSubject,
+            customIntro: customIntro !== undefined ? customIntro : emailCfg.customIntro,
+            customFooter: customFooter !== undefined ? customFooter : emailCfg.customFooter
         });
+
+        recordActivity({
+            type: 'EMAIL_SEND',
+            category: '郵件派發',
+            user: ADMIN_USER,
+            ip: req.socket.remoteAddress,
+            action: `彙整中心派發${reportTitle}成功`,
+            details: `寄至: ${targetRecipients} | 情資筆數: ${result.rowsCount} | Message ID: ${result.messageId}`,
+            status: 'success'
+        });
+
         res.json({ success: true, message: `已成功發送報表至 ${result.recipientCount} 位收件人！`, result });
     } catch (e) {
+        recordActivity({
+            type: 'EMAIL_SEND',
+            category: '郵件派發',
+            user: ADMIN_USER,
+            ip: req.socket.remoteAddress,
+            action: '彙整中心派發報表郵件失敗',
+            details: e.message,
+            status: 'error'
+        });
         res.status(400).json({ success: false, message: '寄送失敗：' + formatSmtpErrorMessage(e) });
     }
 });
@@ -973,6 +1245,15 @@ app.post('/api/admin/posts', requireAuth, (req, res) => {
     };
     posts.unshift(newPost);
     savePosts(posts);
+    recordActivity({
+        type: 'POST_MANAGE',
+        category: '內容管理',
+        user: ADMIN_USER,
+        ip: req.socket.remoteAddress,
+        action: `發布新內部公告 [${newPost.title.slice(0, 30)}]`,
+        details: `分類: ${category} | 置頂: ${newPost.isPinned ? '是' : '否'}`,
+        status: 'success'
+    });
     res.json({ success: true, posts, post: newPost });
 });
 
@@ -988,17 +1269,36 @@ app.put('/api/admin/posts/:id/pin', requireAuth, (req, res) => {
         : !posts[idx].isPinned;
     posts[idx].isPinned = Boolean(nextPinned);
     savePosts(posts);
+    recordActivity({
+        type: 'POST_MANAGE',
+        category: '內容管理',
+        user: ADMIN_USER,
+        ip: req.socket.remoteAddress,
+        action: `${posts[idx].isPinned ? '置頂' : '取消置頂'}文章 [${posts[idx].title.slice(0, 30)}]`,
+        details: `文章 ID #${postId}`,
+        status: 'info'
+    });
     res.json({ success: true, posts, isPinned: posts[idx].isPinned });
 });
 
 app.delete('/api/admin/posts/:id', requireAuth, (req, res) => {
     const postId = Number(req.params.id);
     const posts = getPosts();
+    const targetPost = posts.find(p => Number(p.id) === postId);
     const filtered = posts.filter(p => Number(p.id) !== postId);
     if (filtered.length === posts.length) {
         return res.status(404).json({ success: false, message: '找不到該篇文章' });
     }
     savePosts(filtered);
+    recordActivity({
+        type: 'POST_MANAGE',
+        category: '內容管理',
+        user: ADMIN_USER,
+        ip: req.socket.remoteAddress,
+        action: `刪除文章 [${targetPost ? targetPost.title.slice(0, 30) : `ID #${postId}`}]`,
+        details: `文章 ID #${postId}`,
+        status: 'warning'
+    });
     res.json({ success: true, posts: filtered });
 });
 
@@ -1084,7 +1384,7 @@ app.post('/api/admin/employees/import', requireAuth, (req, res) => {
     });
 });
 
-// Analytics
+// Analytics & Activity Logging
 app.post('/api/stats/hit', (req, res) => {
     const stats = getStats();
 
@@ -1093,37 +1393,46 @@ app.post('/api/stats/hit', (req, res) => {
         onlineUsers.set(req.sessionID, Date.now());
     }
 
-    // Re-enabled deduplication to prevent refresh spamming
-    if (!req.session.hasMarkedVisit) {
-        console.log(`[API] New unique hit from ${req.ip}`);
-        stats.totalViews += 1;
-        req.session.hasMarkedVisit = true;
+    let ip = req.body.simIp || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-        let ip = req.body.simIp || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-        // Handle x-forwarded-for list (take first one)
-        if (typeof ip === 'string' && ip.includes(',')) {
-            ip = ip.split(',')[0].trim();
-        }
-
-        // Normalize IPv6 mapping to IPv4 and handle '::1' for local dev
-        if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
-        if (ip === '::1') ip = '127.0.0.1';
-
-        const employeeName = matchEmployee(ip);
-        console.log(`[API] New Hit - IP: ${ip}, Remote: ${req.socket.remoteAddress}, X-Fwd: ${req.headers['x-forwarded-for']}`);
-        console.log(`[API] Matching: ${ip} -> ${employeeName || 'No Match'}`);
-
-        stats.logs.unshift({
-            ip: ip,
-            employeeName: employeeName || '外部訪客',
-            timestamp: new Date().toISOString()
-        });
-        if (stats.logs.length > 100) stats.logs.pop();
-        saveStats(stats);
-    } else {
-        console.log(`[API] Repeat hit from ${req.ip} (Ignored)`);
+    // Handle x-forwarded-for list (take first one)
+    if (typeof ip === 'string' && ip.includes(',')) {
+        ip = ip.split(',')[0].trim();
     }
+
+    // Normalize IPv6 mapping to IPv4 and handle '::1' for local dev
+    if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
+    if (ip === '::1') ip = '127.0.0.1';
+
+    const employeeName = matchEmployee(ip) || (ip === '127.0.0.1' ? '測試管理員 (本機)' : '外部訪客');
+
+    // Deduplication for unique counter per session
+    const isNewSession = !req.session.hasMarkedVisit;
+    if (isNewSession) {
+        stats.totalViews = (stats.totalViews || 0) + 1;
+        req.session.hasMarkedVisit = true;
+    }
+
+    // Always persist to stats.logs
+    stats.logs.unshift({
+        ip: ip,
+        employeeName: employeeName,
+        timestamp: new Date().toISOString()
+    });
+    if (stats.logs.length > 500) stats.logs.pop();
+    saveStats(stats);
+
+    // Record persistent activity log
+    recordActivity({
+        type: 'VISIT',
+        category: '網站瀏覽',
+        user: '前台訪客',
+        ip: ip,
+        employeeName: employeeName,
+        action: '瀏覽生活資安觀測站首頁',
+        details: isNewSession ? `新進站訪客 (累計總瀏覽數: ${stats.totalViews})` : '同工作階段瀏覽/重新整理',
+        status: 'success'
+    });
 
     res.json({ success: true, totalViews: stats.totalViews });
 });
@@ -1143,25 +1452,45 @@ app.post('/api/stats/post-view/:id', (req, res) => {
     if (!stats.postViews) stats.postViews = {};
     stats.postViews[id] = (stats.postViews[id] || 0) + 1;
     saveStats(stats);
+
+    let ip = req.body.simIp || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    if (typeof ip === 'string' && ip.includes(',')) ip = ip.split(',')[0].trim();
+    if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
+    if (ip === '::1') ip = '127.0.0.1';
+
+    const employeeName = matchEmployee(ip) || (ip === '127.0.0.1' ? '測試管理員 (本機)' : '外部訪客');
+    const posts = getPosts();
+    const foundPost = posts.find(p => String(p.id) === String(id));
+    const title = foundPost ? foundPost.title : `情資 ID #${id}`;
+
+    recordActivity({
+        type: 'ARTICLE_VIEW',
+        category: '文章閱覽',
+        user: '前台訪客',
+        ip: ip,
+        employeeName: employeeName,
+        action: `閱覽資安情報 [${title.slice(0, 32)}${title.length > 32 ? '...' : ''}]`,
+        details: `累計閱覽: ${stats.postViews[id]} 次 ｜ 來源: ${foundPost?.source || '外部情資'}`,
+        status: 'info'
+    });
+
     res.json({ success: true, count: stats.postViews[id] });
 });
 
+// Visitors & Unified Persistent Activity Logs APIs
 app.get('/api/admin/visitors', requireAuth, (req, res) => {
     let { startDate, endDate, page, limit } = req.query;
 
-    // Sanitize and provide defaults
     page = parseInt(page) || 1;
-    limit = parseInt(limit) || 10;
+    limit = parseInt(limit) || 15;
     if (page < 1) page = 1;
 
     let logs = getStats().logs;
 
-    // Filter by date range if provided
     if (startDate || endDate) {
         logs = logs.filter(log => {
             const logDate = new Date(log.timestamp);
             if (startDate && logDate < new Date(startDate)) return false;
-            // Add 1 day to endDate to include the entire end day
             if (endDate) {
                 const end = new Date(endDate);
                 end.setDate(end.getDate() + 1);
@@ -1182,6 +1511,83 @@ app.get('/api/admin/visitors', requireAuth, (req, res) => {
         totalPages,
         currentPage: page
     });
+});
+
+app.get('/api/admin/logs', requireAuth, (req, res) => {
+    let { startDate, endDate, page, limit, type, category, keyword } = req.query;
+
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 15;
+    if (page < 1) page = 1;
+
+    let logs = getSystemLogs();
+
+    if (type && type !== 'ALL') {
+        logs = logs.filter(l => l.type === type);
+    }
+    if (category && category !== 'ALL') {
+        logs = logs.filter(l => l.category === category);
+    }
+    if (keyword && keyword.trim()) {
+        const kw = keyword.trim().toLowerCase();
+        logs = logs.filter(l =>
+            (l.ip && l.ip.toLowerCase().includes(kw)) ||
+            (l.employeeName && l.employeeName.toLowerCase().includes(kw)) ||
+            (l.user && l.user.toLowerCase().includes(kw)) ||
+            (l.action && l.action.toLowerCase().includes(kw)) ||
+            (l.details && l.details.toLowerCase().includes(kw))
+        );
+    }
+    if (startDate || endDate) {
+        logs = logs.filter(log => {
+            const logDate = new Date(log.timestamp);
+            if (startDate && logDate < new Date(startDate)) return false;
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setDate(end.getDate() + 1);
+                if (logDate >= end) return false;
+            }
+            return true;
+        });
+    }
+
+    const totalCount = logs.length;
+    const totalPages = Math.ceil(totalCount / limit) || 1;
+    const startIndex = (page - 1) * limit;
+    const paginatedLogs = logs.slice(startIndex, startIndex + limit);
+
+    res.json({
+        success: true,
+        logs: paginatedLogs,
+        totalCount,
+        totalPages,
+        currentPage: page,
+        fileLogPath: ACTIVITY_LOG_FILE
+    });
+});
+
+app.get('/api/admin/logs/export', requireAuth, (req, res) => {
+    const logs = getSystemLogs();
+    const csvHeader = '\uFEFF時間,類型,分類,人員/對象,來源IP,操作者,事件動作,詳細內容,狀態\n';
+    const csvRows = logs.map(l => {
+        const clean = str => `"${String(str || '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ')}"`;
+        const timeStr = new Date(l.timestamp).toLocaleString('zh-TW', { hour12: false });
+        return [
+            clean(timeStr),
+            clean(l.type),
+            clean(l.category),
+            clean(l.employeeName),
+            clean(l.ip),
+            clean(l.user),
+            clean(l.action),
+            clean(l.details),
+            clean(l.status)
+        ].join(',');
+    }).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="cyberhub_activity_logs_${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csvHeader + csvRows);
 });
 
 // 5. Static File Protection & Single-Port Serving (Item 4)

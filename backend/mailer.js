@@ -33,6 +33,31 @@ export function generateWeeklyReportEmail(posts, config = {}) {
 
     const todayStr = (config.reportDate || new Date().toISOString().slice(0, 10)).replace(/-/g, '/');
 
+    // Custom subject and text support
+    let subject = (config.customSubject && config.customSubject.trim())
+        ? config.customSubject
+            .replace(/\{reportTitle\}/g, reportTitle)
+            .replace(/\{reportDate\}/g, todayStr)
+            .replace(/\{date\}/g, todayStr)
+            .replace(/\{periodDesc\}/g, periodDesc)
+        : `【資安情報】生活資安觀測站 · ${reportTitle} (${todayStr})`;
+
+    let introHtml = '';
+    if (config.customIntro && config.customIntro.trim()) {
+        const processed = config.customIntro
+            .replace(/\{reportTitle\}/g, reportTitle)
+            .replace(/\{reportDate\}/g, todayStr)
+            .replace(/\{date\}/g, todayStr)
+            .replace(/\{periodDesc\}/g, periodDesc);
+        introHtml = escapeHtml(processed);
+    } else {
+        introHtml = `各位長官與同仁好：<br/>本報告由<strong>生活資安觀測站</strong>智慧彙整${periodDesc}。已過濾重複項目並依威脅嚴重程度（CVSS / 0-day 在野利用）加權排序，提供具備實務參考價值之影響分析、防護因應步驟與處置備註。請資訊與維運同仁依建議因應方案啟動內部資產清查與安全防護作業。`;
+    }
+
+    let footerHtml = (config.customFooter && config.customFooter.trim())
+        ? escapeHtml(config.customFooter)
+        : '生活資安觀測站 · 資安情報分析小組 製作 ｜ 本信件為系統自動彙整派發，若有資安疑慮請即刻通報內部資安專線';
+
     const tableRowsHtml = rows.map((r, i) => `
         <tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f9fafb'};">
             <td style="border: 1px solid #d1d5db; padding: 10px 8px; text-align: center; font-size: 13px; font-family: monospace; white-space: nowrap; vertical-align: top;">
@@ -82,8 +107,7 @@ export function generateWeeklyReportEmail(posts, config = {}) {
             <!-- Briefing Intro -->
             <div style="padding: 16px 30px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #475569; line-height: 1.6;">
                 <p style="margin: 0;">
-                    各位長官與同仁好：<br/>
-                    本報告由<strong>生活資安觀測站</strong>智慧彙整${periodDesc}。已過濾重複項目並依威脅嚴重程度（CVSS / 0-day 在野利用）加權排序，提供具備實務參考價值之影響分析、防護因應步驟與處置備註。請資訊與維運同仁依建議因應方案啟動內部資產清查與安全防護作業。
+                    ${introHtml}
                 </p>
             </div>
 
@@ -108,7 +132,7 @@ export function generateWeeklyReportEmail(posts, config = {}) {
 
             <!-- Email Footer -->
             <div style="background-color: #f8fafc; padding: 16px 30px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #6b7280; text-align: center; line-height: 1.5;">
-                生活資安觀測站 · 資安情報分析小組 製作 ｜ 本信件為系統自動彙整派發，若有資安疑慮請即刻通報內部資安專線
+                ${footerHtml}
             </div>
         </div>
     </body>
@@ -135,7 +159,7 @@ export function generateWeeklyReportEmail(posts, config = {}) {
         html,
         csvContent,
         rows,
-        subject: `【資安情報】生活資安觀測站 · ${reportTitle} (${todayStr})`
+        subject
     };
 }
 
