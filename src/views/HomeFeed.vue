@@ -1225,4 +1225,46 @@ onUnmounted(() => {
 .it-exit-btn:hover {
     background: rgba(255, 255, 255, 0.25);
 }
+
+
+@media (max-width: 640px) {
+    .feed-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.65rem;
+        padding: 0.65rem 0.85rem;
+    }
+    .controls-status {
+        justify-content: space-between;
+        width: 100%;
+    }
+    .controls-actions {
+        justify-content: space-between;
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .controls-divider {
+        display: none;
+    }
+    .category-chips-bar {
+        padding: 0.4rem 0;
+        gap: 0.35rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    .category-chip {
+        padding: 0.32rem 0.65rem;
+        font-size: 0.78rem;
+    }
+}
+
+@media (max-width: 420px) {
+    .controls-actions {
+        gap: 0.35rem;
+    }
+    .ctrl-btn {
+        padding: 0.28rem 0.45rem;
+        font-size: 0.76rem;
+    }
+}
 </style>

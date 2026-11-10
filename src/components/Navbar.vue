@@ -113,14 +113,14 @@ onUnmounted(() => {
       </div>
 
       <div class="nav-links">
-        <router-link to="/" active-class="active" exact>
-          <i class="fa-solid fa-house"></i> 首頁動態
+        <router-link to="/" active-class="active" exact title="首頁動態">
+          <i class="fa-solid fa-house"></i> <span class="nav-label">首頁動態</span>
         </router-link>
-        <router-link to="/dictionary" active-class="active">
-          <i class="fa-solid fa-book-open"></i> 防護辭典
+        <router-link to="/dictionary" active-class="active" title="防護辭典">
+          <i class="fa-solid fa-book-open"></i> <span class="nav-label">防護辭典</span>
         </router-link>
-        <router-link to="/lab" active-class="active">
-          <i class="fa-solid fa-flask"></i> 實戰演練
+        <router-link to="/lab" active-class="active" title="實戰演練">
+          <i class="fa-solid fa-flask"></i> <span class="nav-label">實戰演練</span>
         </router-link>
       </div>
 
@@ -232,6 +232,32 @@ onUnmounted(() => {
 
 @media (max-width: 900px) {
     .nav-search-wrapper {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .nav-label {
+        display: none;
+    }
+    .nav-links a {
+        padding: 0.5rem 0.65rem;
+        font-size: 1.05rem;
+    }
+    .logo span {
+        font-size: 1.1rem;
+    }
+}
+
+@media (max-width: 420px) {
+    .logo span {
+        font-size: 0.98rem;
+    }
+    .nav-container {
+        padding: 0 0.75rem;
+        gap: 0.5rem;
+    }
+    .visitor-badge {
         display: none;
     }
 }

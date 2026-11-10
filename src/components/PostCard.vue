@@ -899,4 +899,46 @@ const actionTakeaway = computed(() => {
     background-color: #854d0e;
     color: #fef08a;
 }
+
+
+@media (max-width: 480px) {
+    .post-header {
+        padding: 0.75rem 0.85rem 0.5rem;
+        gap: 0.6rem;
+    }
+    .post-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+    .post-author {
+        font-size: 0.88rem;
+    }
+    .post-time {
+        font-size: 0.72rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.2rem 0.4rem;
+    }
+    .post-content {
+        padding: 0 0.85rem 0.75rem;
+    }
+    .post-title {
+        font-size: 1.02rem;
+        line-height: 1.45;
+    }
+    .life-summary-box {
+        padding: 0.65rem 0.8rem;
+        font-size: 0.86rem;
+    }
+    .post-actions {
+        padding: 0.25rem 0.35rem;
+        gap: 0.2rem;
+    }
+    .action-btn {
+        font-size: 0.76rem;
+        padding: 0.45rem 0.25rem;
+        gap: 0.25rem;
+    }
+}
 </style>

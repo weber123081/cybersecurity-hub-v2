@@ -471,3 +471,30 @@ body {
         display: none;
     }
 }
+
+@media (max-width: 640px) {
+    .main-container {
+        margin-top: 68px;
+        padding: 0 0.75rem;
+    }
+    .back-to-top {
+        right: 16px;
+        bottom: 20px;
+        width: 38px;
+        height: 38px;
+        font-size: 0.95rem;
+    }
+    .site-footer {
+        padding: 2rem 0.75rem 1.5rem;
+        font-size: 0.75rem;
+        text-align: center;
+        line-height: 1.5;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-container {
+        margin-top: 64px;
+        padding: 0 0.5rem;
+    }
+}
