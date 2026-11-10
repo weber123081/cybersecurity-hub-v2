@@ -20,6 +20,33 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || '25692299';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'cyber-super-secret-key-2026';
 
+// Global error handlers to keep the server resilient and perpetually running
+process.on('uncaughtException', (err) => {
+    console.error('[CRITICAL] Uncaught Exception:', err);
+    try {
+        recordActivity({
+            type: 'SYSTEM',
+            category: '系統異常',
+            action: '程式發生未捕捉例外 (Uncaught Exception)',
+            details: String(err?.stack || err?.message || err),
+            status: 'ERROR'
+        });
+    } catch (_) {}
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[CRITICAL] Unhandled Promise Rejection at:', promise, 'reason:', reason);
+    try {
+        recordActivity({
+            type: 'SYSTEM',
+            category: '系統異常',
+            action: '非同步例外未捕捉 (Unhandled Rejection)',
+            details: String(reason?.stack || reason?.message || reason),
+            status: 'WARNING'
+        });
+    } catch (_) {}
+});
+
 // 1. Middleware Stack (PRIORITY ORDER)
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
