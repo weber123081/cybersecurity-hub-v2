@@ -155,12 +155,15 @@ start "" "http://localhost:3000/"
 pause
 `, 'utf8');
 
-// 建立 停止生活資安觀測站.bat
+// 建立 停止生活資安觀測站.bat (僅精確停止佔用 3000 Port 之觀測站進程，不誤殺其他系統程式)
 fs.writeFileSync(path.join(BUNDLE_DIR, '停止生活資安觀測站.bat'), `@echo off
 chcp 65001 >nul
 title 停止生活資安觀測站
-echo 正在停止本機後台服務進程...
-taskkill /f /im node.exe >nul 2>&1
+echo 正在尋找監聽 Port 3000 之生活資安觀測站服務...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000" ^| findstr "LISTENING"') do (
+    echo 正在停止觀測站進程 (PID: %%a)...
+    taskkill /f /pid %%a >nul 2>&1
+)
 echo [完成] 生活資安觀測站服務已安全關閉。
 timeout /t 2 >nul
 `, 'utf8');
