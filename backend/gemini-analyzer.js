@@ -66,18 +66,16 @@ export function cleanAndValidateApiKey(key) {
 }
 
 /**
- * 智慧模型適配：支援現行活躍的 3.5-flash 與 2.5-flash
+ * 智慧模型適配：支援現行活躍的 2.5-flash、3-flash-preview 與 3.5-flash
  */
 export function resolveModel(model) {
-    if (!model) return 'gemini-3.5-flash';
+    if (!model) return 'gemini-2.5-flash';
     const m = String(model).trim().toLowerCase();
-    if (m.includes('3.5') || m.includes('3.1') || m.includes('flash')) {
-        return 'gemini-3.5-flash';
-    }
-    if (m.includes('pro')) {
-        return 'gemini-3.5-flash'; // 優先使用高可用之 flash 避免 pro 額度或棄用限制
-    }
-    return 'gemini-3.5-flash';
+    if (m.includes('2.5')) return 'gemini-2.5-flash';
+    if (m.includes('3.5')) return 'gemini-3.5-flash';
+    if (m.includes('3') && m.includes('preview')) return 'gemini-3-flash-preview';
+    if (m.includes('pro')) return 'gemini-2.5-flash';
+    return m.startsWith('gemini-') ? m : 'gemini-2.5-flash';
 }
 
 /**
@@ -109,10 +107,9 @@ export async function testGeminiApiKey(rawApiKey, requestedModel = 'gemini-3.5-f
 
     const candidateModels = Array.from(new Set([
         targetModel,
-        'gemini-3.5-flash',
-        'gemini-3.1-flash-lite',
         'gemini-2.5-flash',
-        'gemini-flash-latest'
+        'gemini-3-flash-preview',
+        'gemini-3.5-flash'
     ]));
 
     let lastError = null;
@@ -210,15 +207,15 @@ JSON 格式規範：
     const primaryModel = resolveModel(requestedModel);
     const candidateModels = Array.from(new Set([
         primaryModel,
-        'gemini-3.5-flash',
-        'gemini-3.1-flash-lite',
         'gemini-2.5-flash',
-        'gemini-flash-latest'
+        'gemini-3-flash-preview',
+        'gemini-3.5-flash'
     ]));
 
     let lastError = null;
 
     for (const model of candidateModels) {
+        let switchModel = false;
         for (let attempt = 1; attempt <= 2; attempt++) {
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -235,18 +232,32 @@ JSON 格式規範：
                     })
                 });
 
-                if (response.status === 429 || response.status === 503) {
+                if (response.status === 429) {
                     const errJson = await response.json().catch(() => ({}));
-                    lastError = errJson.error?.message || `HTTP ${response.status}`;
-                    console.warn(`[Gemini AI] Model ${model} ${response.status}, waiting 1.2s before retry...`);
-                    await new Promise(r => setTimeout(r, 1200));
-                    continue;
+                    lastError = errJson.error?.message || `HTTP 429`;
+                    if (/per day limit exceeded|RESOURCE_EXHAUSTED|free_tier_requests/i.test(lastError)) {
+                        console.warn(`[Gemini AI] 模型 ${model} 已達免費層每日限額 (429 Quota Exceeded)，無縫切換至備援模型...`);
+                        switchModel = true;
+                        break;
+                    }
+                    console.warn(`[Gemini AI] 模型 ${model} 觸發頻率限制 (429)，自動降速等待後切換...`);
+                    switchModel = true;
+                    break;
+                }
+
+                if (response.status === 503) {
+                    const errJson = await response.json().catch(() => ({}));
+                    lastError = errJson.error?.message || `HTTP 503`;
+                    console.warn(`[Gemini AI] 模型 ${model} 當前負載過高 (503 High Demand)，即刻平滑切換至備援模型...`);
+                    switchModel = true;
+                    break;
                 }
 
                 if (!response.ok) {
                     const errJson = await response.json().catch(() => ({}));
                     lastError = errJson.error?.message || `HTTP ${response.status}`;
-                    console.warn(`[Gemini AI] Model ${model} returned error: ${lastError}`);
+                    console.warn(`[Gemini AI] 模型 ${model} 回傳錯誤: ${lastError}，嘗試備援模型...`);
+                    switchModel = true;
                     break;
                 }
 
@@ -270,6 +281,9 @@ JSON 格式規範：
             } catch (e) {
                 lastError = e.message;
             }
+        }
+        if (switchModel) {
+            continue;
         }
     }
 

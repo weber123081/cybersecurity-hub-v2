@@ -76,7 +76,7 @@ const DEFAULT_SITE_CONFIG = {
     ai: {
         enabled: true,
         apiKey: "",
-        model: "gemini-3.5-flash"
+        model: "gemini-2.5-flash"
     }
 };
 

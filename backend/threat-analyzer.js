@@ -467,6 +467,11 @@ export async function buildThreatReportRowsAsync(posts, options = {}) {
                 row.aiModel = aiResult.model || model;
                 row.analyzedAt = aiResult.analyzedAt;
             }
+
+            // 加入 1.5 秒節奏防護 (Pacing Delay)，避免觸發 Google API 429 頻率上限
+            if (i < baseRows.length - 1) {
+                await new Promise(r => setTimeout(r, 1500));
+            }
         } catch (e) {
             console.warn(`[ThreatAnalyzer] AI error for item ${row.id}, falling back to rule-based:`, e.message);
         }
