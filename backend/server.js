@@ -20,8 +20,17 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || '25692299';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'cyber-super-secret-key-2026';
 
+// Prevent broken pipe errors from crashing the background daemon
+process.stdout?.on('error', (err) => {
+    if (err?.code === 'EPIPE' || err?.code === 'ERR_STREAM_DESTROYED') return;
+});
+process.stderr?.on('error', (err) => {
+    if (err?.code === 'EPIPE' || err?.code === 'ERR_STREAM_DESTROYED') return;
+});
+
 // Global error handlers to keep the server resilient and perpetually running
 process.on('uncaughtException', (err) => {
+    if (err?.code === 'EPIPE' || err?.code === 'ERR_STREAM_DESTROYED') return;
     console.error('[CRITICAL] Uncaught Exception:', err);
     try {
         recordActivity({
@@ -45,6 +54,10 @@ process.on('unhandledRejection', (reason, promise) => {
             status: 'WARNING'
         });
     } catch (_) {}
+});
+
+process.on('exit', (code) => {
+    console.log(`[PROCESS] Server process exiting with code: ${code}`);
 });
 
 // 1. Middleware Stack (PRIORITY ORDER)
